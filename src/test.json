@@ -1,0 +1,3 @@
+[
+{   "ip": "10.0.6.32",   "timestamp": "1654283366", "ports": [ {"port": 5555, "proto": "tcp", "status": "open", "reason": "syn-ack", "ttl": 64} ] }
+]
