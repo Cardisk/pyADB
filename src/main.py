@@ -1,13 +1,16 @@
 import subprocess
 import os
 import json
+from time import sleep
 from json import JSONDecodeError
-from rich import print
+from rich.console import Console
 from rich.table import Table
 
 from adbutils import adb
 
 import click
+
+console = Console()
 
 #   Trovare un modo per generalizzare i comandi da passare alla shell adb
 #   possibile shell interattiva?
@@ -33,28 +36,29 @@ def cli():
 @click.option('-p', '--port', help='Porta/e da passare a masscan', required=True)
 def masscan(net, port):
     # Masscan sulla rete.
-    scan_res = subprocess.run(
-        ['masscan', net, '-p', port, '-oJ', 'devices.json'],
-        capture_output=True
-    )
+    with console.status('[yellow]Performing mass scan[/]', spinner='dots'):
+        scan_res = subprocess.run(
+            ['masscan', net, '-p', port, '-oJ', 'devices.json'],
+            capture_output=True
+        )
     if scan_res.returncode != 0:
-        print(f'[bold red]ERROR[/]: Failed to execute mass scan [cyan](permission error?)[/]')
-        print(f'[bold cyan]GOT[/]: [red]{scan_res.stderr}[/]')
+        console.print(f'[bold red]ERROR[/]: Failed to execute mass scan [cyan](permission error?)[/]')
+        console.print(f'[bold cyan]GOT[/]: [red]{scan_res.stderr}[/]')
 
 
 @click.command()
 @click.option('-f', '--file', help='File da dove caricare gli ip', default='devices.json')
 def load(file):
     if not os.path.exists('./' + file):
-        print(f'[bold red]ERROR[/]: {file} does not exist.')
+        console.print(f'[bold red]ERROR[/]: {file} does not exist.')
         return
 
     with open(file, 'r') as f:
         try:
             data = json.load(f)
-            print(f'[bold green]SUCCESS[/]: Data got from file {file}')
+            console.print(f'[bold green]SUCCESS[/]: Data got from file {file}')
         except JSONDecodeError:
-            print(f'[bold red]ERROR[/]: Unable to read json data from {file} [cyan](empty?)[/]')
+            console.print(f'[bold red]ERROR[/]: Unable to read json data from {file} [cyan](empty?)[/]')
             return
 
     for d in data:
@@ -69,10 +73,14 @@ def dump(out):
     pass
 
 
+@click.command()
 def connect():
-    # Connette i dispositivi con adb
-    for addr in devices:
-        adb.connect(addr, timeout=2.0)
+    with console.status('[yellow]Connecting devices[/]', spinner='dots'):
+        # sleep(5) # metti sta sleep e goditi lo spettacolo
+        # Connette i dispositivi con adb
+        for addr in devices:
+            adb.connect(addr, timeout=2.0)
+    console.print('[green bold]CONNECTED[/]')
 
 
 @click.command('show')
@@ -82,12 +90,13 @@ def show_devices():
     for device in adb.device_list():
         table.add_row(f'{device.serial}')
 
-    print(table)
+    console.print(table)
 
 
 cli.add_command(masscan)
 cli.add_command(load)
 cli.add_command(show_devices)
+cli.add_command(connect)
 
 
 if __name__ == '__main__':
