@@ -2,6 +2,8 @@ import subprocess
 import os
 import json
 from json import JSONDecodeError
+from rich import print
+from rich.table import Table
 
 from adbutils import adb
 
@@ -21,48 +23,46 @@ import click
 devices = []
 
 
-def masscan(scan, port):
-    if (scan is None) and (port is None):
+@click.group()
+def cli():
+    pass
+
+
+@click.command()
+@click.option('-n', '--net', help='Rete + maschera per masscan', required=True)
+@click.option('-p', '--port', help='Porta/e da passare a masscan', required=True)
+def masscan(net, port):
+    # Masscan sulla rete.
+    scan_res = subprocess.run(
+        ['masscan', net, '-p', port, '-oJ', 'devices.json'],
+        capture_output=True
+    )
+    if scan_res.returncode != 0:
+        print(f'[bold red]ERROR[/]: Failed to execute mass scan [cyan](permission error?)[/]')
+        print(f'[bold cyan]GOT[/]: [red]{scan_res.stderr}[/]')
+
+
+@click.command()
+@click.option('-f', '--file', help='File da dove caricare gli ip', default='devices.json')
+def load(file):
+    if not os.path.exists('./' + file):
+        print(f'[bold red]ERROR[/]: {file} does not exist.')
         return
 
-    if (scan is None) and port:
-        print(f'ADB-GRABBER ERROR: -s/--scan ADDRESS/PORT is required if -p/--port {port} is specified')
-        exit(2)
-    if scan and (port is None):
-        print(f'ADB-GRABBER ERROR: -s/--scan {scan} requires -p/--port PORT')
-        exit(2)
-
-    # Masscan sulla rete.
-    subprocess.run(
-        ['masscan', scan, '-p', port, '-oJ', 'devices.json'],
-        capture_output=False
-    )
-
-
-def load(file):
-    default_file = 'devices.json'
-
-    if file is None:
-        file = default_file
-
-    if not os.path.exists('./' + file):
-        print(f'ADB-GRABBER ERROR: ./{file} does not exists.')
-        exit(2)
-
-    # Caricamento del dump in memoria.
     with open(file, 'r') as f:
         try:
             data = json.load(f)
+            print(f'[bold green]SUCCESS[/]: Data got from file {file}')
         except JSONDecodeError:
-            print(f'ADB-GRABBER ERROR: {file} contains no devices.')
-            exit(2)
+            print(f'[bold red]ERROR[/]: Unable to read json data from {file} [cyan](empty?)[/]')
+            return
 
-        for d in data:
-            # Controlla se il servizio trovato da masscan non è sulla porta adb
-            if '5555' == d['ports'][0]['port']:
-                continue
+    for d in data:
+        # Controlla se il servizio trovato da masscan non è sulla porta adb
+        if '5555' == d['ports'][0]['port']:
+            continue
 
-            devices.append(f"{d['ip']}:{d['ports'][0]['port']}")
+        devices.append(f"{d['ip']}:{d['ports'][0]['port']}")
 
 
 def dump(out):
@@ -74,19 +74,21 @@ def connect():
     for addr in devices:
         adb.connect(addr, timeout=2.0)
 
-    print(adb.device_list())
+
+@click.command('show')
+def show_devices():
+    table = Table()
+    table.add_column("Devices addresses", style="cyan bold")
+    for device in adb.device_list():
+        table.add_row(f'{device.serial}')
+
+    print(table)
 
 
-@click.command()
-@click.option('-s', '--scan', help='Rete + maschera per masscan')
-@click.option('-p', '--port', help='Porta/e da passare a masscan')
-@click.option('-f', '--file', help='File da dove caricare gli ip')
-@click.option('-o', '--out', help='File di output')
-def main(scan, port, file):
-    masscan(scan, port)
-    load(file)
-    connect()
+cli.add_command(masscan)
+cli.add_command(load)
+cli.add_command(show_devices)
 
 
 if __name__ == '__main__':
-    main()
+    cli()
