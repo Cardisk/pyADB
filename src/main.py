@@ -1,16 +1,20 @@
 import subprocess
 import os
 import json
-from time import sleep
 from json import JSONDecodeError
+
+from time import sleep
+
 from rich.console import Console
 from rich.table import Table
 
 from adbutils import adb
 
-import click
+import Pyro4
+import Pyro4.errors
+import Pyro4.naming
 
-console = Console()
+import click
 
 #   Trovare un modo per generalizzare i comandi da passare alla shell adb
 #   possibile shell interattiva?
@@ -23,12 +27,24 @@ console = Console()
 
 #   Se specificato dalla flag, al termine del programma disconnetti tutti i dispositivi --kill
 
-devices = []
+
+console = Console()
+
+
+def proxy(uri):
+    return Pyro4.Proxy(uri)
 
 
 @click.group()
 def cli():
-    pass
+    daemon = proxy('PYRONAME:mimdaemon')
+    try:
+        daemon.check()
+    except Pyro4.errors.NamingError:
+        subprocess.run(
+            ['python3', 'server.py'], capture_output=True
+        )
+        daemon = proxy('PYRONAME:mimdaemon')
 
 
 @click.command()
@@ -97,7 +113,6 @@ cli.add_command(masscan)
 cli.add_command(load)
 cli.add_command(show_devices)
 cli.add_command(connect)
-
 
 if __name__ == '__main__':
     cli()
