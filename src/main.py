@@ -2,18 +2,13 @@ import subprocess
 import os
 import json
 from json import JSONDecodeError
-import pickle
 
-from time import sleep
+import pickle
 
 from rich.console import Console
 from rich.table import Table
 
 from adbutils import adb
-
-import Pyro4
-import Pyro4.errors
-import Pyro4.naming
 
 import click
 
@@ -51,20 +46,8 @@ def cache_recall(name):
     return obj
 
 
-# def proxy(uri):
-#     return Pyro4.Proxy(uri)
-
-
 @click.group()
 def cli():
-    # daemon = proxy('PYRONAME:mimdaemon')
-    # try:
-    #     daemon.check()
-    # except Pyro4.errors.NamingError:
-    #     subprocess.run(
-    #         ['python3', 'server.py'], capture_output=True
-    #     )
-    #     daemon = proxy('PYRONAME:mimdaemon')
     pass
 
 
