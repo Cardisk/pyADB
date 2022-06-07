@@ -30,16 +30,14 @@ class Daemon:
             conn, addr = self.socket.accept()
             if conn:
                 string = conn.recv(1024).decode()
-                print(string)
 
                 if 'stop' in string:
+                    self.socket.close()
                     break
 
                 if 'list' in string:
-                    print('LISTING')
                     conn.sendall(stringify(list(self.devices)).encode())
                 elif '[' in string:
-                    print('ADDING')
                     temp = reverse_stringify(string)
                     for i in temp:
                         self.devices.add(i)
