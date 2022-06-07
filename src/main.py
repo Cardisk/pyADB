@@ -2,6 +2,7 @@ import subprocess
 import os
 import json
 from json import JSONDecodeError
+import pickle
 
 from time import sleep
 
@@ -31,20 +32,40 @@ import click
 console = Console()
 
 
-def proxy(uri):
-    return Pyro4.Proxy(uri)
+def cache_save(name, obj):
+    if os.path.exists('./cache/' + name + '.pkl'):
+        console.print(f'[red]CACHE[/]: {name} exists already, try a different name or delete it from directory.')
+        return
+    with open('./cache/' + name + '.pkl', 'wb') as f:
+        pickle.dump(obj, f)
+    console.print(f'[green]CACHE[/]: {obj} saved to cache.')
+
+
+def cache_recall(name):
+    if not os.path.exists('./cache/' + name + '.pkl'):
+        console.print(f'[red]CACHE[/]: {name} does not exist.')
+        return
+    with open('./cache/' + name + '.pkl', 'rb') as f:
+        obj = pickle.load(f)
+    console.print(f'[green]CACHE[/]: {obj} loaded from cache.')
+    return obj
+
+
+# def proxy(uri):
+#     return Pyro4.Proxy(uri)
 
 
 @click.group()
 def cli():
-    daemon = proxy('PYRONAME:mimdaemon')
-    try:
-        daemon.check()
-    except Pyro4.errors.NamingError:
-        subprocess.run(
-            ['python3', 'server.py'], capture_output=True
-        )
-        daemon = proxy('PYRONAME:mimdaemon')
+    # daemon = proxy('PYRONAME:mimdaemon')
+    # try:
+    #     daemon.check()
+    # except Pyro4.errors.NamingError:
+    #     subprocess.run(
+    #         ['python3', 'server.py'], capture_output=True
+    #     )
+    #     daemon = proxy('PYRONAME:mimdaemon')
+    pass
 
 
 @click.command()
@@ -77,12 +98,14 @@ def load(file):
             console.print(f'[bold red]ERROR[/]: Unable to read json data from {file} [cyan](empty?)[/]')
             return
 
+    devices = []
     for d in data:
         # Controlla se il servizio trovato da masscan non è sulla porta adb
         if '5555' == d['ports'][0]['port']:
             continue
-
         devices.append(f"{d['ip']}:{d['ports'][0]['port']}")
+
+    cache_save('devices', devices)
 
 
 def dump(out):
@@ -91,6 +114,7 @@ def dump(out):
 
 @click.command()
 def connect():
+    devices = cache_recall('devices')
     with console.status('[yellow]Connecting devices[/]', spinner='dots'):
         # sleep(5) # metti sta sleep e goditi lo spettacolo
         # Connette i dispositivi con adb
@@ -102,9 +126,15 @@ def connect():
 @click.command('show')
 def show_devices():
     table = Table()
-    table.add_column("Devices addresses", style="cyan bold")
-    for device in adb.device_list():
-        table.add_row(f'{device.serial}')
+    table.add_column("Devices address", style="cyan bold")
+    table.add_column("Present", style="cyan bold")
+    table.add_column("ADB status", style="cyan bold")
+    devices = adb.track_devices()
+
+    # Da generatore a lista per i primi n elementi,
+    # adb.track_devices() non termina ma continua ad ascoltare cambiamenti
+    for device in [next(devices) for _ in range(len(adb.device_list()))]:
+        table.add_row(str(device.serial), str(device.present), str(device.status))
 
     console.print(table)
 
