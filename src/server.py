@@ -1,12 +1,16 @@
 import socket
-from json import JSONEncoder, loads
+
+
+def stringify(arr: list):
+    space = ' '
+    return space.join(arr)
+
+
+def reverse_stringify(string: str):
+    return string.split(' ')
 
 
 class Daemon:
-    class Encoder(JSONEncoder):
-        def default(self, obj):
-            return list(obj)
-
     def __init__(self, host='', port=65535):
         self.socket = socket.socket()
         self.socket.bind((host, port))
@@ -15,7 +19,7 @@ class Daemon:
         self.run()
 
     def get_devices(self):
-        return self.devices
+        return list(self.devices)
 
     def add_devices(self, devices=[]):
         for device in devices:
@@ -26,10 +30,21 @@ class Daemon:
             conn, addr = self.socket.accept()
             if conn:
                 string = conn.recv(1024).decode()
-                if string == 'list':
-                    conn.sendall(self.Encoder().encode(self.devices).encode())
+                print(string)
+
+                if 'stop' in string:
+                    break
+
+                if 'list' in string:
+                    print('LISTING')
+                    conn.sendall(stringify(list(self.devices)).encode())
                 elif '[' in string:
-                    temp = set(loads(string))
+                    print('ADDING')
+                    temp = reverse_stringify(string)
                     for i in temp:
                         self.devices.add(i)
+
             conn.close()
+
+
+Daemon()
