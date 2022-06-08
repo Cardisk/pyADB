@@ -7,14 +7,20 @@ def stringify(arr: list):
 
 
 def reverse_stringify(string: str):
-    return string.split(' ')
+    temp = string.split(' ')
+    for i in temp:
+        i = i.replace('\'', '')
+        i = i.replace(',', '')
+        i = i.replace('[', '')
+        i = i.replace(']', '')
+    return temp
 
 
 class Daemon:
     def __init__(self, host='', port=65535):
         self.socket = socket.socket()
         self.socket.bind((host, port))
-        self.socket.listen()
+        self.socket.listen(1)
         self.devices = set()
         self.run()
 
