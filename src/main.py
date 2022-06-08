@@ -36,10 +36,11 @@ def cache_save(name, obj):
     if not os.path.exists(user_cache_dir(cache_name, cache_author)):
         os.mkdir(user_cache_dir(cache_name, cache_author))
 
+    mode = 'wb'
     if os.path.exists(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl'):
-        console.print(f'[red]CACHE[/]: {name} exists already, try a different name or delete it from directory.')
-        return
-    with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', 'wb') as f:
+        mode = 'a+'
+
+    with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', mode) as f:
         pickle.dump(obj, f)
     console.print(f'[green]CACHE[/]: {obj} saved to cache.')
 
@@ -51,7 +52,7 @@ def cache_recall(name):
     if not os.path.exists(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl'):
         console.print(f'[red]CACHE[/]: {name} does not exist.')
         return
-    with open('./cache/' + name + '.pkl', 'rb') as f:
+    with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', 'rb') as f:
         obj = pickle.load(f)
     console.print(f'[green]CACHE[/]: {obj} loaded from cache.')
     return obj
