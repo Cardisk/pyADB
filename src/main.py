@@ -137,6 +137,7 @@ def broadcast_command():
             output[item.serial] = item.serial + 'EOL' + device.shell(command)
     console.print('[bold green]COMPLETED[/]')
 
+    # Se anche solo un dispositivo torna output prova a stamparlo
     if len(output) > 0:
         check = False
         for i in output:
@@ -147,7 +148,9 @@ def broadcast_command():
             while True:
                 console.print('You obtained some results, do you wanna display them? [cyan](Y/n)[/] ', end='')
                 answer = console.input()
+
                 if answer == 'Y' or answer == 'y' or answer == 'YES' == answer == 'yes':
+                    # Stampa l'output come tabella (seriale -> output)
                     table = Table(title='COMMAND OUTPUT')
                     table.add_column("Device", style="cyan bold", justify='center')
                     table.add_column("Output", style="cyan bold", justify='center')
@@ -160,8 +163,11 @@ def broadcast_command():
                     break
 
                 elif answer == 'N' or answer == 'n' or answer == 'NO' == answer == 'no':
+                    # Ignora
                     break
+
                 else:
+                    # Richiede nuovamente all'utente
                     console.print('[bold red]Please type only (Y/n) letters.[/]', end='\r')
                     sleep(2)
 
