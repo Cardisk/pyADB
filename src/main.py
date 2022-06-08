@@ -10,6 +10,8 @@ from rich.table import Table
 
 from adbutils import adb
 
+from appdirs import *
+
 import click
 
 #   Trovare un modo per generalizzare i comandi da passare alla shell adb
@@ -23,21 +25,30 @@ import click
 
 #   Se specificato dalla flag, al termine del programma disconnetti tutti i dispositivi --kill
 
+# VARIABLES
 
 console = Console()
+cache_name = 'MIM_Orchestrator'
+cache_author = 'Bessi-Cardinaletti'
 
 
 def cache_save(name, obj):
-    if os.path.exists('./cache/' + name + '.pkl'):
+    if not os.path.exists(user_cache_dir(cache_name, cache_author)):
+        os.mkdir(user_cache_dir(cache_name, cache_author))
+
+    if os.path.exists(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl'):
         console.print(f'[red]CACHE[/]: {name} exists already, try a different name or delete it from directory.')
         return
-    with open('./cache/' + name + '.pkl', 'wb') as f:
+    with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', 'wb') as f:
         pickle.dump(obj, f)
     console.print(f'[green]CACHE[/]: {obj} saved to cache.')
 
 
 def cache_recall(name):
-    if not os.path.exists('./cache/' + name + '.pkl'):
+    if not os.path.exists(user_cache_dir(cache_name, cache_author)):
+        os.mkdir(user_cache_dir(cache_name, cache_author))
+
+    if not os.path.exists(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl'):
         console.print(f'[red]CACHE[/]: {name} does not exist.')
         return
     with open('./cache/' + name + '.pkl', 'rb') as f:
