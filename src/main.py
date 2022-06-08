@@ -3,6 +3,8 @@ import os
 import json
 from json import JSONDecodeError
 
+from time import sleep
+
 import pickle
 
 from rich.console import Console
@@ -14,14 +16,8 @@ from appdirs import *
 
 import click
 
-#   Trovare un modo per generalizzare i comandi da passare alla shell adb
-#   possibile shell interattiva?
-
 #   Realizzare una tabella dove mostra i dati dei dispositivi connessi,
-#   cliccandoci sopra apre scrcpy
-
-#   Quando il programma viene stoppato con command-C/ctrl-C allora deve
-#   effettuare il dump dell'output su file se indicato dalla flag --out
+#   cliccandoci sopra apre scrcpy (parzialmente completato)
 
 #   Se specificato dalla flag, al termine del programma disconnetti tutti i dispositivi --kill
 
@@ -103,10 +99,6 @@ def load(file):
     cache_save('devices', devices)
 
 
-def dump(out):
-    pass
-
-
 @click.command()
 def connect():
     devices = cache_recall('devices')
@@ -134,10 +126,55 @@ def show_devices():
     console.print(table)
 
 
+@click.command('broad-cmd')
+def broadcast_command():
+    output = []
+    command = console.input('[cyan]$[/] ')
+
+    with console.status('[yellow]Executing[/]', spinner='dots'):
+        for item in [next(adb.track_devices()) for _ in range(len(adb.device_list()))]:
+            device = adb.device(item.serial)
+            output[item.serial] = item.serial + 'EOL' + device.shell(command)
+    console.print('[bold green]COMPLETED[/]')
+
+    if len(output) > 0:
+        check = False
+        for i in output:
+            if len(i) > 0:
+                check = True
+                break
+        if check:
+            while True:
+                console.print('You obtained some results, do you wanna display them? [cyan](Y/n)[/] ', end='')
+                answer = console.input()
+                if answer == 'Y' or answer == 'y' or answer == 'YES' == answer == 'yes':
+                    table = Table(title='COMMAND OUTPUT')
+                    table.add_column("Device", style="cyan bold", justify='center')
+                    table.add_column("Output", style="cyan bold", justify='center')
+
+                    for item in output:
+                        group = item.split('EOL')
+                        if len(group) > 2:
+                            continue
+                        table.add_row(group[0], group[1])
+                    break
+
+                elif answer == 'N' or answer == 'n' or answer == 'NO' == answer == 'no':
+                    break
+                else:
+                    console.print('[bold red]Please type only (Y/n) letters.[/]', end='\r')
+                    sleep(2)
+
+
 cli.add_command(masscan)
 cli.add_command(load)
 cli.add_command(show_devices)
 cli.add_command(connect)
+cli.add_command(broadcast_command)
 
+# Con il try-except tecnicamente non dovrebbe crashare con CTRL-C. Per scrupolo sarebbe da aggiungere ovunque.
 if __name__ == '__main__':
-    cli()
+    try:
+        cli()
+    except KeyboardInterrupt:
+        pass
