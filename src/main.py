@@ -236,6 +236,34 @@ def push_file(local: str, remote: str):
         console.print('[bold red]Something went wrong during the transfer[/]')
 
 
+@cli.command()
+@click.option('-a', '--apk', help='', required=True)
+def install(apk):
+    if len(adb.device_list()) == 0:
+        console.print('[bold red]No devices connected.[/]')
+        return
+
+    success = False
+    devices = adb.track_devices()
+
+    with console.status('[yellow]Installing items', spinner='dots'):
+        for item in [next(devices) for _ in range(len(adb.device_list()))]:
+            try:
+                device = adb.device(item.serial)
+                device.install(apk)
+                success = True
+            except RuntimeError:
+                continue
+            except TypeError:
+                continue
+            except adbutils.AdbError:
+                continue
+    if success is True:
+        console.print('[bold green]INSTALLATION COMPLETED[/]')
+    else:
+        console.print('[bold red]Something went wrong during the installation[/]')
+
+
 @cli.command('kill-server')
 def kill_server():
     devices = adb.track_devices()
