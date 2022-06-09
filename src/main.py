@@ -143,10 +143,12 @@ def show_devices():
 @cli.command('broad-cmd')
 def broadcast_command():
     output = dict()
+    devices = adb.track_devices()
+
     command = console.input('[cyan]$[/] ')
 
     with console.status('[yellow]Executing[/]', spinner='dots'):
-        for item in [next(adb.track_devices()) for _ in range(len(adb.device_list()))]:
+        for item in [next(devices) for _ in range(len(adb.device_list()))]:
             device = adb.device(item.serial)
             output[item.serial] = item.serial + 'EOL' + device.shell(command)
     console.print('[bold green]COMPLETED[/]')
@@ -213,12 +215,13 @@ def push_file(local, remote):
 
 @cli.command('kill-server')
 def kill_server():
+    devices = adb.track_devices()
     with console.status('[yellow]Disconnecting', spinner='dots'):
-        for item in [next(adb.track_devices()) for _ in range(len(adb.device_list()))]:
+        for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
                 adb.disconnect(item.serial)
             except adbutils.AdbError:
-                pass
+                continue
     console.print('[bold red]DISCONNECTED[/]')
 
 
