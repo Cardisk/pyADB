@@ -126,7 +126,7 @@ def connect(socket):
 
 @cli.command('show')
 def show_devices():
-    table = Table()
+    table = Table(expand=True, show_lines=True)
     table.add_column("Devices address", style="cyan bold")
     table.add_column("Present", style="cyan bold")
     table.add_column("ADB status", style="cyan bold")
@@ -142,6 +142,10 @@ def show_devices():
 
 @cli.command('broad-cmd')
 def broadcast_command():
+    if len(adb.device_list()) == 0:
+        console.print('[bold red]No devices connected.[/]')
+        return
+
     output = dict()
     devices = adb.track_devices()
 
@@ -171,7 +175,7 @@ def broadcast_command():
 
                 if answer == 'Y' or answer == 'y' or answer == 'YES' or answer == 'yes':
                     # Stampa l'output come tabella (seriale -> output)
-                    table = Table()
+                    table = Table(expand=True, show_lines=True)
                     table.add_column("Device", style="cyan bold", justify='center')
                     table.add_column("Output", style="cyan bold", justify='left')
 
@@ -200,6 +204,10 @@ def broadcast_command():
 @click.option('-l', '--local', help='File locale', required=True)
 @click.option('-r', '--remote', help='Dove metterlo sul dispositivo remoto', required=True)
 def push_file(local: str, remote: str):
+    if len(adb.device_list()) == 0:
+        console.print('[bold red]No devices connected.[/]')
+        return
+
     if not remote.startswith('/'):
         console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
         return
@@ -209,6 +217,7 @@ def push_file(local: str, remote: str):
 
     success = False
     devices = adb.track_devices()
+
     with console.status('[yellow]Pushing items', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
