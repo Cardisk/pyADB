@@ -1,23 +1,16 @@
 import subprocess
 import json
 from json import JSONDecodeError
-
-from time import sleep
-
-import pickle
-
 from rich.console import Console
 from rich.table import Table
-
 import adbutils
 from adbutils import adb
-
+from time import sleep
+import pickle
 from appdirs import *
-
+import shutil
+from typing import Union
 import click
-
-#   Realizzare una tabella dove mostra i dati dei dispositivi connessi,
-#   cliccandoci sopra apre scrcpy (parzialmente completato)
 
 # VARIABLES
 
@@ -25,6 +18,8 @@ console = Console()
 cache_name = 'MIM_Orchestrator'
 cache_author = 'Bessi-Cardinaletti'
 
+
+# UTILS
 
 def cache_save(name, obj):
     if not os.path.exists(user_cache_dir(cache_name, cache_author)):
@@ -52,29 +47,45 @@ def cache_recall(name):
     return set(obj)
 
 
+# COMMANDS
+
 @click.group()
 def cli():
     pass
 
 
 @cli.command()
-@click.option('-n', '--net', help='Rete + maschera per masscan', required=True)
-@click.option('-p', '--port', help='Porta/e da passare a masscan', required=True)
-def masscan(net, port):
-    # Masscan sulla rete.
-    with console.status('[yellow]Performing mass scan[/]', spinner='dots'):
+@click.option('-n', '--net', help='Where you need to perform you masscan [type: NET/MASK]', required=True)
+@click.option('-p', '--port', help='Port range that you want to check [type: X or XX-YY or X,YY-ZZ]', required=True)
+def masscan(net: str, port: Union[str, int]) -> None:
+    """
+    Performs a masscan on the given net (example: 192.168.1.0/24)
+    and check if there are services listening to the given port or range.
+
+    :param net: Network/Mask
+    :param port: Port or range of port (example1: 80, example2: 80-100, example3: 80,90-100)
+    :return: None
+    """
+    with console.status('[yellow]Performing masscan[/]', spinner='dots'):
         scan_res = subprocess.run(
             ['masscan', net, '-p', port, '-oJ', 'devices.json'],
             capture_output=True
         )
     if scan_res.returncode != 0:
-        console.print(f'[bold red]ERROR[/]: Failed to execute mass scan [cyan](permission error?)[/]')
+        console.print(f'[bold red]ERROR[/]: Failed to execute masscan [cyan](permission error?)[/]')
         console.print(f'[bold cyan]GOT[/]: [red]{scan_res.stderr}[/]')
 
 
 @cli.command()
-@click.option('-f', '--file', help='File da dove caricare gli ip', default='devices.json')
-def load(file):
+@click.option('-f', '--file', help='JSON file containing the result of a masscan search', default='devices.json')
+def load(file: str) -> None:
+    """
+    Loads the sockets found by masscan command into a cache_file.
+    It can also load into the same file the content of another masscan JSON output file, given as a parameter.
+
+    :param file: File -- default: devices.json
+    :return: None
+    """
     if not os.path.exists('./' + file):
         console.print(f'[bold red]ERROR[/]: {file} does not exist.')
         return
@@ -89,7 +100,6 @@ def load(file):
 
     devices = []
     for d in data:
-        # Controlla se il servizio trovato da masscan non è sulla porta adb
         if '5555' == d['ports'][0]['port']:
             continue
         devices.append(f"{d['ip']}:{d['ports'][0]['port']}")
@@ -98,8 +108,15 @@ def load(file):
 
 
 @cli.command()
-@click.option('-s', '--socket', help='Socket ip specifico da connettere')
-def connect(socket):
+@click.option('-s', '--socket', help='Specific socket address that needs to be connected')
+def connect(socket: str) -> None:
+    """
+    Connects all the devices found int the cache_file to the given adb session.
+
+    :param socket: Socket
+    :return: None
+    """
+
     success = False
     if not socket:
         devices = cache_recall('devices')
@@ -119,21 +136,25 @@ def connect(socket):
         except adbutils.AdbTimeout:
             pass
     if success is True:
-        console.print('[green bold]CONNECTED[/]')
+        console.print('[green bold]CONNECTED:[/] wow! You\'re not alone!')
     else:
-        console.print('[bold red]Something went wrong during connection[/]')
+        console.print('[bold red]Something went wrong during the connection[/]')
 
 
 @cli.command('show')
-def show_devices():
+def show_devices() -> None:
+    """
+    Shows a table with the informations of the connected devices.
+
+    :return: None
+    """
+
     table = Table(expand=True, show_lines=True)
     table.add_column("Devices address", style="cyan bold")
     table.add_column("Present", style="cyan bold")
     table.add_column("ADB status", style="cyan bold")
     devices = adb.track_devices()
 
-    # Da generatore a lista per i primi n elementi,
-    # adb.track_devices() non termina ma continua ad ascoltare cambiamenti
     for device in [next(devices) for _ in range(len(adb.device_list()))]:
         table.add_row(str(device.serial), str(device.present), str(device.status))
 
@@ -141,7 +162,13 @@ def show_devices():
 
 
 @cli.command('broad-cmd')
-def broadcast_command():
+def broadcast_command() -> None:
+    """
+    Executes a shell command to all the connected devices.
+
+    :return: None
+    """
+
     if len(adb.device_list()) == 0:
         console.print('[bold red]No devices connected.[/]')
         return
@@ -152,14 +179,14 @@ def broadcast_command():
     command = console.input('[cyan]$[/] ')
 
     if not command:
-        console.print(f'[bold red]You need to type something[/]')
+        console.print(f'[bold red]You need to type something.[/]')
         return
 
     with console.status('[yellow]Executing[/]', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             device = adb.device(item.serial)
             output[item.serial] = item.serial + 'EOL' + device.shell(command)
-    console.print('[bold green]COMPLETED[/]')
+    console.print('[bold green]DONE[/]')
 
     # Se anche solo un dispositivo torna output prova a stamparlo
     if len(output) > 0:
@@ -201,9 +228,17 @@ def broadcast_command():
 
 
 @cli.command('push')
-@click.option('-l', '--local', help='File locale', required=True)
-@click.option('-r', '--remote', help='Dove metterlo sul dispositivo remoto', required=True)
-def push_file(local: str, remote: str):
+@click.option('-l', '--local', help='File in a local path', required=True)
+@click.option('-r', '--remote', help='Remote absolute path', required=True)
+def push_file(local: str, remote: str) -> None:
+    """
+    Pushes a local file into all the remote machines.
+
+    :param local: Local file
+    :param remote: Remote destination
+    :return: None
+    """
+
     if len(adb.device_list()) == 0:
         console.print('[bold red]No devices connected.[/]')
         return
@@ -218,7 +253,7 @@ def push_file(local: str, remote: str):
     success = False
     devices = adb.track_devices()
 
-    with console.status('[yellow]Pushing items', spinner='dots'):
+    with console.status('[yellow]Pushing items[/]', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
                 device = adb.device(item.serial)
@@ -231,14 +266,22 @@ def push_file(local: str, remote: str):
             except adbutils.AdbError:
                 continue
     if success is True:
-        console.print('[bold green]PUSH COMPLETED[/]')
+        console.print('[bold green]PUSH:[/] your little file is now property of everyone!')
     else:
         console.print('[bold red]Something went wrong during the transfer[/]')
 
 
 @cli.command()
-@click.option('-a', '--apk', help='', required=True)
-def install(apk):
+@click.option('-a', '--apk', help='Apk file that has to be installed [type: path/file.apk or url/file.apk]',
+              required=True)
+def install(apk: str) -> None:
+    """
+    Performs the installation of the given apk on all the connected devices.
+
+    :param apk: Apk file
+    :return: None
+    """
+
     if len(adb.device_list()) == 0:
         console.print('[bold red]No devices connected.[/]')
         return
@@ -246,7 +289,7 @@ def install(apk):
     success = False
     devices = adb.track_devices()
 
-    with console.status('[yellow]Installing items', spinner='dots'):
+    with console.status('[yellow]Installing items[/]', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
                 device = adb.device(item.serial)
@@ -259,26 +302,42 @@ def install(apk):
             except adbutils.AdbError:
                 continue
     if success is True:
-        console.print('[bold green]INSTALLATION COMPLETED[/]')
+        console.print('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
     else:
         console.print('[bold red]Something went wrong during the installation[/]')
 
 
+@cli.command('cache-cls')
+def clear_cache() -> None:
+    """
+    Removes all the cache elements to free some space.
+
+    :return: None
+    """
+
+    with console.status('[yellow]Cleaning[/]', spinner='dots'):
+        if os.path.exists(user_cache_dir(cache_name, cache_author)):
+            shutil.rmtree(user_cache_dir(cache_name, cache_author), ignore_errors=True)
+    console.print('[bold green]SUCCESS:[/] there is no more messy around here.')
+
+
 @cli.command('kill-server')
-def kill_server():
+def kill_server() -> None:
+    """
+    Emulates the adb kill-server command. All the devices will be disconnected from this adb session.
+
+    :return: None
+    """
+
     devices = adb.track_devices()
-    with console.status('[yellow]Disconnecting', spinner='dots'):
+    with console.status('[yellow]Disconnecting[/]', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
                 adb.disconnect(item.serial)
             except adbutils.AdbError:
                 continue
-    console.print('[bold red]DISCONNECTED[/]')
+    console.print('[bold red]DISCONNECTED:[/] everything fine, but now you are alone.')
 
 
-# Con il try-except tecnicamente non dovrebbe crashare con CTRL-C. Per scrupolo sarebbe da aggiungere ovunque.
 if __name__ == '__main__':
-    try:
-        cli()
-    except KeyboardInterrupt:
-        pass
+    cli()
