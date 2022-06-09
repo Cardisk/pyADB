@@ -128,7 +128,7 @@ def show_devices():
 
 @click.command('broad-cmd')
 def broadcast_command():
-    output = []
+    output = dict()
     command = console.input('[cyan]$[/] ')
 
     with console.status('[yellow]Executing[/]', spinner='dots'):
@@ -140,8 +140,8 @@ def broadcast_command():
     # Se anche solo un dispositivo torna output prova a stamparlo
     if len(output) > 0:
         check = False
-        for i in output:
-            if len(i) > 0:
+        for key in output:
+            if len(output[key]) > 0:
                 check = True
                 break
         if check:
@@ -149,20 +149,22 @@ def broadcast_command():
                 console.print('You obtained some results, do you wanna display them? [cyan](Y/n)[/] ', end='')
                 answer = console.input()
 
-                if answer == 'Y' or answer == 'y' or answer == 'YES' == answer == 'yes':
+                if answer == 'Y' or answer == 'y' or answer == 'YES' or answer == 'yes':
                     # Stampa l'output come tabella (seriale -> output)
-                    table = Table(title='COMMAND OUTPUT')
+                    table = Table()
                     table.add_column("Device", style="cyan bold", justify='center')
-                    table.add_column("Output", style="cyan bold", justify='center')
+                    table.add_column("Output", style="cyan bold", justify='left')
 
-                    for item in output:
-                        group = item.split('EOL')
+                    for key in output:
+                        group = output[key].split('EOL')
                         if len(group) > 2:
                             continue
                         table.add_row(group[0], group[1])
+
+                    console.print(table)
                     break
 
-                elif answer == 'N' or answer == 'n' or answer == 'NO' == answer == 'no':
+                elif answer == 'N' or answer == 'n' or answer == 'NO' or answer == 'no':
                     # Ignora
                     break
 
