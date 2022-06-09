@@ -204,13 +204,16 @@ def push_file(local: str, remote: str):
         console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
         return
 
+    if local not in remote:
+        remote += '/' + local
+
     success = False
     devices = adb.track_devices()
     with console.status('[yellow]Pushing items', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
                 device = adb.device(item.serial)
-                device.sync.push(local, remote)
+                device.sync.push(str(local), str(remote))
                 success = True
             except RuntimeError:
                 continue
