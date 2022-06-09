@@ -1,5 +1,4 @@
 import subprocess
-import os
 import json
 from json import JSONDecodeError
 
@@ -10,6 +9,7 @@ import pickle
 from rich.console import Console
 from rich.table import Table
 
+import adbutils
 from adbutils import adb
 
 from appdirs import *
@@ -18,8 +18,6 @@ import click
 
 #   Realizzare una tabella dove mostra i dati dei dispositivi connessi,
 #   cliccandoci sopra apre scrcpy (parzialmente completato)
-
-#   Se specificato dalla flag, al termine del programma disconnetti tutti i dispositivi --kill
 
 # VARIABLES
 
@@ -34,7 +32,7 @@ def cache_save(name, obj):
 
     mode = 'wb'
     if os.path.exists(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl'):
-        mode = 'a+'
+        mode = 'ab'
 
     with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', mode) as f:
         pickle.dump(obj, f)
@@ -51,7 +49,7 @@ def cache_recall(name):
     with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', 'rb') as f:
         obj = pickle.load(f)
     console.print(f'[green]CACHE[/]: {obj} loaded from cache.')
-    return obj
+    return set(obj)
 
 
 @click.group()
@@ -59,7 +57,7 @@ def cli():
     pass
 
 
-@click.command()
+@cli.command()
 @click.option('-n', '--net', help='Rete + maschera per masscan', required=True)
 @click.option('-p', '--port', help='Porta/e da passare a masscan', required=True)
 def masscan(net, port):
@@ -74,7 +72,7 @@ def masscan(net, port):
         console.print(f'[bold cyan]GOT[/]: [red]{scan_res.stderr}[/]')
 
 
-@click.command()
+@cli.command()
 @click.option('-f', '--file', help='File da dove caricare gli ip', default='devices.json')
 def load(file):
     if not os.path.exists('./' + file):
@@ -99,18 +97,34 @@ def load(file):
     cache_save('devices', devices)
 
 
-@click.command()
-def connect():
-    devices = cache_recall('devices')
-    with console.status('[yellow]Connecting devices[/]', spinner='dots'):
-        # sleep(5) # metti sta sleep e goditi lo spettacolo
-        # Connette i dispositivi con adb
-        for addr in devices:
-            adb.connect(addr, timeout=2.0)
-    console.print('[green bold]CONNECTED[/]')
+@cli.command()
+@click.option('-s', '--socket', help='Socket ip specifico da connettere')
+def connect(socket):
+    success = False
+    if not socket:
+        devices = cache_recall('devices')
+        with console.status('[yellow]Connecting devices[/]', spinner='dots'):
+            # sleep(5) # metti sta sleep e goditi lo spettacolo
+            # Connette i dispositivi con adb
+            for addr in devices:
+                try:
+                    adb.connect(addr, timeout=2.0)
+                    success = True
+                except adbutils.AdbTimeout:
+                    pass
+    else:
+        try:
+            adb.connect(socket, timeout=2.0)
+            success = True
+        except adbutils.AdbTimeout:
+            pass
+    if success is True:
+        console.print('[green bold]CONNECTED[/]')
+    else:
+        console.print('[bold red]Something went wrong during connection[/]')
 
 
-@click.command('show')
+@cli.command('show')
 def show_devices():
     table = Table()
     table.add_column("Devices address", style="cyan bold")
@@ -126,7 +140,7 @@ def show_devices():
     console.print(table)
 
 
-@click.command('broad-cmd')
+@cli.command('broad-cmd')
 def broadcast_command():
     output = dict()
     command = console.input('[cyan]$[/] ')
@@ -174,11 +188,39 @@ def broadcast_command():
                     sleep(2)
 
 
-cli.add_command(masscan)
-cli.add_command(load)
-cli.add_command(show_devices)
-cli.add_command(connect)
-cli.add_command(broadcast_command)
+@cli.command('push')
+@click.option('-l', '--local', help='File locale', required=True)
+@click.option('-r', '--remote', help='Dove metterlo sul dispositivo remoto', required=True)
+def push_file(local, remote):
+    success = False
+    with console.status('[yellow]Pushing items', spinner='dots'):
+        for item in [next(adb.track_devices()) for _ in range(len(adb.device_list()))]:
+            try:
+                device = adb.device(item.serial)
+                device.sync.push(local, remote)
+                success = True
+            except RuntimeError:
+                pass
+            except TypeError:
+                pass
+            except adbutils.AdbError:
+                pass
+    if success is True:
+        console.print('[bold green]PUSH COMPLETED[/]')
+    else:
+        console.print('[bold red]Something went wrong during the transfer[/]')
+
+
+@cli.command('kill-server')
+def kill_server():
+    with console.status('[yellow]Disconnecting', spinner='dots'):
+        for item in [next(adb.track_devices()) for _ in range(len(adb.device_list()))]:
+            try:
+                adb.disconnect(item.serial)
+            except adbutils.AdbError:
+                pass
+    console.print('[bold red]DISCONNECTED[/]')
+
 
 # Con il try-except tecnicamente non dovrebbe crashare con CTRL-C. Per scrupolo sarebbe da aggiungere ovunque.
 if __name__ == '__main__':
