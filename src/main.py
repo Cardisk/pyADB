@@ -147,6 +147,10 @@ def broadcast_command():
 
     command = console.input('[cyan]$[/] ')
 
+    if not command:
+        console.print(f'[bold red]You need to type something[/]')
+        return
+
     with console.status('[yellow]Executing[/]', spinner='dots'):
         for item in [next(devices) for _ in range(len(adb.device_list()))]:
             device = adb.device(item.serial)
@@ -157,7 +161,7 @@ def broadcast_command():
     if len(output) > 0:
         check = False
         for key in output:
-            if len(output[key]) > 0:
+            if len(output[key].split("EOL")[1]) > 0:
                 check = True
                 break
         if check:
@@ -188,25 +192,32 @@ def broadcast_command():
                     # Richiede nuovamente all'utente
                     console.print('[bold red]Please type only (Y/n) letters.[/]', end='\r')
                     sleep(2)
+        else:
+            console.print('[blue]There is no output for your command[/]')
 
 
 @cli.command('push')
 @click.option('-l', '--local', help='File locale', required=True)
 @click.option('-r', '--remote', help='Dove metterlo sul dispositivo remoto', required=True)
-def push_file(local, remote):
+def push_file(local: str, remote: str):
+    if not remote.startswith('/'):
+        console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
+        return
+
     success = False
+    devices = adb.track_devices()
     with console.status('[yellow]Pushing items', spinner='dots'):
-        for item in [next(adb.track_devices()) for _ in range(len(adb.device_list()))]:
+        for item in [next(devices) for _ in range(len(adb.device_list()))]:
             try:
                 device = adb.device(item.serial)
                 device.sync.push(local, remote)
                 success = True
             except RuntimeError:
-                pass
+                continue
             except TypeError:
-                pass
+                continue
             except adbutils.AdbError:
-                pass
+                continue
     if success is True:
         console.print('[bold green]PUSH COMPLETED[/]')
     else:
