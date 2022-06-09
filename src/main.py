@@ -121,14 +121,12 @@ def connect(socket: str) -> None:
     if not socket:
         devices = cache_recall('devices')
         with console.status('[yellow]Connecting devices[/]', spinner='dots'):
-            # sleep(5) # metti sta sleep e goditi lo spettacolo
-            # Connette i dispositivi con adb
             for addr in devices:
                 try:
                     adb.connect(addr, timeout=2.0)
                     success = True
                 except adbutils.AdbTimeout:
-                    pass
+                    continue
     else:
         try:
             adb.connect(socket, timeout=2.0)
@@ -188,7 +186,6 @@ def broadcast_command() -> None:
             output[item.serial] = item.serial + 'EOL' + device.shell(command)
     console.print('[bold green]DONE[/]')
 
-    # Se anche solo un dispositivo torna output prova a stamparlo
     if len(output) > 0:
         check = False
         for key in output:
@@ -201,7 +198,6 @@ def broadcast_command() -> None:
                 answer = console.input()
 
                 if answer == 'Y' or answer == 'y' or answer == 'YES' or answer == 'yes':
-                    # Stampa l'output come tabella (seriale -> output)
                     table = Table(expand=True, show_lines=True)
                     table.add_column("Device", style="cyan bold", justify='center')
                     table.add_column("Output", style="cyan bold", justify='left')
@@ -216,11 +212,9 @@ def broadcast_command() -> None:
                     break
 
                 elif answer == 'N' or answer == 'n' or answer == 'NO' or answer == 'no':
-                    # Ignora
                     break
 
                 else:
-                    # Richiede nuovamente all'utente
                     console.print('[bold red]Please type only (Y/n) letters.[/]', end='\r')
                     sleep(2)
         else:
