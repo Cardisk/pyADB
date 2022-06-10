@@ -238,18 +238,18 @@ def push_file(local: str, remote: str) -> None:
         console.print('[bold red]No devices connected.[/]')
         return
 
-    if not remote.startswith('/'):
+    if not remote.startswith('/'):  # TODO: far fare a pathlib
         console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
         return
 
-    if local not in remote:
+    if not remote.endswith(local):  # non mi piace si potrebbe rompere ma meglio di not in
         remote += '/' + local
 
     success = False
-    devices = adb.track_devices()
+    devices = get_by_status('device') # TODO: aggiungere alle altre funzioni
 
     with console.status('[yellow]Pushing items[/]', spinner='dots'):
-        for item in [next(devices) for _ in range(len(adb.device_list()))]:
+        for item in devices:
             try:
                 device = adb.device(item.serial)
                 device.sync.push(str(local), str(remote))
@@ -264,6 +264,21 @@ def push_file(local: str, remote: str) -> None:
         console.print('[bold green]PUSH:[/] your little file is now property of everyone!')
     else:
         console.print('[bold red]Something went wrong during the transfer[/]')
+
+
+def get_by_status(status):
+    """
+    Utility function to get devices by status
+
+    :param status:
+    :return: list
+    """
+    device_tracker = adb.track_devices()
+    devices = []
+    for device in [next(device_tracker) for _ in range(len(adb.device_list()))]:
+        if device.status == status:
+            devices.append(device)
+    return devices
 
 
 @cli.command()
