@@ -1,9 +1,8 @@
-import os
 import subprocess
 import json
 from json import JSONDecodeError
 from rich.console import Console
-from rich.progress import track, Progress, TextColumn
+from rich.progress import track, Progress
 from rich.table import Table
 import adbutils
 from adbutils import adb
@@ -11,7 +10,8 @@ from time import sleep
 import pickle
 from appdirs import *
 import shutil
-from typing import Union
+from typing import Union, Optional, Set, Any
+import re
 import click
 
 # VARIABLES
@@ -23,7 +23,15 @@ cache_author = 'Bessi-Cardinaletti'
 
 # UTILS
 
-def cache_save(name, obj):
+def cache_save(name: str, obj: object) -> None:
+    """
+    Saves to a cache file the passed object with pickle module.
+
+    :param name: File name
+    :param obj: Object
+    :return: None
+    """
+
     if not os.path.exists(user_cache_dir(cache_name, cache_author)):
         os.mkdir(user_cache_dir(cache_name, cache_author))
 
@@ -36,7 +44,14 @@ def cache_save(name, obj):
     console.print(f'[green]CACHE[/]: {obj} saved to cache.')
 
 
-def cache_recall(name):
+def cache_recall(name: str) -> Optional[Set[Any]]:
+    """
+    Loads into a set the content of the cache file.
+
+    :param name: File name
+    :return: A set
+    """
+
     if not os.path.exists(user_cache_dir(cache_name, cache_author)):
         os.mkdir(user_cache_dir(cache_name, cache_author))
 
@@ -47,6 +62,22 @@ def cache_recall(name):
         obj = pickle.load(f)
     console.print(f'[green]CACHE[/]: {obj} loaded from cache.')
     return set(obj)
+
+
+def get_by_status(status: str) -> list:
+    """
+    Utility function to get devices by status.
+
+    :param status:
+    :return: list
+    """
+
+    device_tracker = adb.track_devices()
+    devices = []
+    for device in [next(device_tracker) for _ in range(len(adb.device_list()))]:
+        if device.status == status:
+            devices.append(device)
+    return devices
 
 
 # COMMANDS
@@ -68,19 +99,22 @@ def masscan(net: str, port: Union[str, int]) -> None:
     :param port: Port or range of port (example1: 80, example2: 80-100, example3: 80,90-100)
     :return: None
     """
+
     p = subprocess.Popen(['masscan', net, '-p', port, '-oJ', 'devices.json'], stdout=subprocess.PIPE,
                          bufsize=10000,
                          stderr=subprocess.STDOUT,
                          universal_newlines=True)
     with Progress() as progress:
-        scan_task = progress.add_task('[yellow bold]Performing masscan...', total=100.00)
+        scan_task = progress.add_task('[yellow bold]Performing masscan', total=100.00)
         while (line := p.stdout.readline()) != '':
             if '%' not in line:
-                progress.print(f'[cyan bold]subprocess[/]: {line}', end='')
+                match = re.match(r'[\s]+', line)
+                if match is None:
+                    progress.print(f'[cyan bold]SUBPROCESS[/]: {line}', end='')
             else:
                 fields = line.split(',')
                 if 'waiting' in fields[2]:
-                    progress.print(fields[2], end='')
+                    progress.print(fields[2], end='\r')
                 else:
                     progress.print(fields[3].strip())
                 progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
@@ -161,9 +195,10 @@ def show_devices() -> None:
     table.add_column("Devices address", style="cyan bold")
     table.add_column("Present", style="cyan bold")
     table.add_column("ADB status", style="cyan bold")
-    devices = adb.track_devices()
 
-    for device in [next(devices) for _ in range(len(adb.device_list()))]:
+    devices = get_by_status('device')
+
+    for device in track(devices, description='[yellow]Executing[/]'):
         table.add_row(str(device.serial), str(device.present), str(device.status))
 
     console.print(table)
@@ -182,7 +217,7 @@ def broadcast_command() -> None:
         return
 
     output = dict()
-    devices = adb.track_devices()
+    devices = get_by_status('device')
 
     command = console.input('[cyan]$[/] ')
 
@@ -190,10 +225,9 @@ def broadcast_command() -> None:
         console.print(f'[bold red]You need to type something.[/]')
         return
 
-    with console.status('[yellow]Executing[/]', spinner='dots'):
-        for item in [next(devices) for _ in range(len(adb.device_list()))]:
-            device = adb.device(item.serial)
-            output[item.serial] = item.serial + 'EOL' + device.shell(command)
+    for item in track(devices):
+        device = adb.device(item.serial)
+        output[item.serial] = item.serial + 'EOL' + device.shell(command)
     console.print('[bold green]DONE[/]')
 
     if len(output) > 0:
@@ -255,34 +289,19 @@ def push_file(local: str, remote: str) -> None:
         remote += '/' + local
 
     success = False
-    devices = get_by_status('device')  # TODO: aggiungere alle altre funzioni
+    devices = get_by_status('device')
 
-    for item in track(devices, description='Pushing...'):
+    for item in track(devices, description='Pushing'):
         try:
             device = adb.device(item.serial)
             device.sync.push(str(local), str(remote))
             success = True
-        except TypeError | RuntimeError | adbutils.AdbError:
+        except Union[TypeError, RuntimeError, adbutils.AdbError]:
             continue
     if success is True:
         console.print('[bold green]PUSH:[/] your little file is now property of everyone!')
     else:
         console.print('[bold red]Something went wrong during the transfer[/]')
-
-
-def get_by_status(status):
-    """
-    Utility function to get devices by status
-
-    :param status:
-    :return: list
-    """
-    device_tracker = adb.track_devices()
-    devices = []
-    for device in [next(device_tracker) for _ in range(len(adb.device_list()))]:
-        if device.status == status:
-            devices.append(device)
-    return devices
 
 
 @cli.command()
@@ -301,20 +320,19 @@ def install(apk: str) -> None:
         return
 
     success = False
-    devices = adb.track_devices()
+    devices = get_by_status('device')
 
-    with console.status('[yellow]Installing items[/]', spinner='dots'):
-        for item in [next(devices) for _ in range(len(adb.device_list()))]:
-            try:
-                device = adb.device(item.serial)
-                device.install(apk)
-                success = True
-            except RuntimeError:
-                continue
-            except TypeError:
-                continue
-            except adbutils.AdbError:
-                continue
+    for item in track(devices, description='[yellow]Installing items[/]'):
+        try:
+            device = adb.device(item.serial)
+            device.install(apk)
+            success = True
+        except RuntimeError:
+            continue
+        except TypeError:
+            continue
+        except adbutils.AdbError:
+            continue
     if success is True:
         console.print('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
     else:
@@ -343,13 +361,12 @@ def kill_server() -> None:
     :return: None
     """
 
-    devices = adb.track_devices()
-    with console.status('[yellow]Disconnecting[/]', spinner='dots'):
-        for item in [next(devices) for _ in range(len(adb.device_list()))]:
-            try:
-                adb.disconnect(item.serial)
-            except adbutils.AdbError:
-                continue
+    devices = get_by_status('device')
+    for item in track(devices, description='[yellow]Disconnecting[/]'):
+        try:
+            adb.disconnect(item.serial)
+        except adbutils.AdbError:
+            continue
     console.print('[bold red]DISCONNECTED:[/] everything fine, but now you are alone.')
 
 

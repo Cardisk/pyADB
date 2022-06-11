@@ -19,8 +19,8 @@ There are various commands that wrap the functionality implemented by ADB itself
 - cache-cls
 - kill-server
 
----
-### MASSCAN
+
+## Masscan
 
 Masscan is a powerful tool that can easily scan a net on a specified port or range of ports.
 If any service is found listening on the given parameters it will print it at the end of the execution.
