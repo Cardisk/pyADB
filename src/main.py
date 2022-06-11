@@ -218,7 +218,7 @@ def connect(socket: str) -> None:
 @cli.command('show')
 def show_devices() -> None:
     """
-    Shows a table with the informations of the connected devices.
+    Shows a table with the information of the connected devices.
 
     :return: None
     """
