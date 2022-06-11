@@ -1,3 +1,4 @@
+import pathlib
 import subprocess
 import json
 from json import JSONDecodeError
@@ -110,13 +111,13 @@ def masscan(net: str, port: Union[str, int]) -> None:
             if '%' not in line:
                 match = re.match(r'[\s]+', line)
                 if match is None:
-                    progress.print(f'[cyan bold]SUBPROCESS[/]: {line}', end='')
+                    progress.console.print(f'[cyan bold]SUBPROCESS[/]: {line}', end='')
             else:
                 fields = line.split(',')
                 if 'waiting' in fields[2]:
-                    progress.print(fields[2], end='\r')
+                    progress.console.print(fields[2], end='\r')
                 else:
-                    progress.print(fields[3].strip())
+                    progress.console.print(fields[3].strip().replace('\n', ''))
                 progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
 
 
@@ -281,12 +282,13 @@ def push_file(local: str, remote: str) -> None:
         console.print('[bold red]No devices connected.[/]')
         return
 
-    if not remote.startswith('/'):  # TODO: far fare a pathlib
+    if not pathlib.PurePath(remote).is_absolute():
         console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
         return
 
-    if not remote.endswith(local):  # non mi piace si potrebbe rompere ma meglio di not in
-        remote += '/' + local
+    if not remote.endswith(local):
+        filename = local.split('/')[-1]
+        remote = os.path.join(remote, filename)
 
     success = False
     devices = get_by_status('device')
@@ -339,7 +341,7 @@ def install(apk: str) -> None:
         console.print('[bold red]Something went wrong during the installation[/]')
 
 
-@cli.command('cache-cls')
+@cli.command('clear')
 def clear_cache() -> None:
     """
     Removes all the cache elements to free some space.
