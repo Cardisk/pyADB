@@ -3,6 +3,7 @@ import subprocess
 import json
 from json import JSONDecodeError
 from rich.console import Console
+from rich.progress import track, Progress, TextColumn
 from rich.table import Table
 import adbutils
 from adbutils import adb
@@ -67,14 +68,22 @@ def masscan(net: str, port: Union[str, int]) -> None:
     :param port: Port or range of port (example1: 80, example2: 80-100, example3: 80,90-100)
     :return: None
     """
-    with console.status('[yellow]Performing masscan[/]', spinner='dots'):
-        scan_res = subprocess.run(
-            ['masscan', net, '-p', port, '-oJ', 'devices.json'],
-            capture_output=True
-        )
-    if scan_res.returncode != 0:
-        console.print(f'[bold red]ERROR[/]: Failed to execute masscan [cyan](permission error?)[/]')
-        console.print(f'[bold cyan]GOT[/]: [red]{scan_res.stderr}[/]')
+    p = subprocess.Popen(['masscan', net, '-p', port, '-oJ', 'devices.json'], stdout=subprocess.PIPE,
+                         bufsize=10000,
+                         stderr=subprocess.STDOUT,
+                         universal_newlines=True)
+    with Progress() as progress:
+        scan_task = progress.add_task('[yellow bold]Performing masscan...', total=100.00)
+        while (line := p.stdout.readline()) != '':
+            if '%' not in line:
+                progress.print(f'[cyan bold]subprocess[/]: {line}', end='')
+            else:
+                fields = line.split(',')
+                if 'waiting' in fields[2]:
+                    progress.print(fields[2], end='')
+                else:
+                    progress.print(fields[3].strip())
+                progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
 
 
 @cli.command()
@@ -246,20 +255,15 @@ def push_file(local: str, remote: str) -> None:
         remote += '/' + local
 
     success = False
-    devices = get_by_status('device') # TODO: aggiungere alle altre funzioni
+    devices = get_by_status('device')  # TODO: aggiungere alle altre funzioni
 
-    with console.status('[yellow]Pushing items[/]', spinner='dots'):
-        for item in devices:
-            try:
-                device = adb.device(item.serial)
-                device.sync.push(str(local), str(remote))
-                success = True
-            except RuntimeError:
-                continue
-            except TypeError:
-                continue
-            except adbutils.AdbError:
-                continue
+    for item in track(devices, description='Pushing...'):
+        try:
+            device = adb.device(item.serial)
+            device.sync.push(str(local), str(remote))
+            success = True
+        except TypeError | RuntimeError | adbutils.AdbError:
+            continue
     if success is True:
         console.print('[bold green]PUSH:[/] your little file is now property of everyone!')
     else:
