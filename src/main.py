@@ -2,8 +2,8 @@ import pathlib
 import subprocess
 import json
 from json import JSONDecodeError
-from rich.console import Console
-from rich.progress import track, Progress
+from rich.console import Console, RenderableType
+from rich.progress import track, Progress, Column, Text, StyleType, JustifyMethod, ProgressColumn, SpinnerColumn
 from rich.table import Table
 import adbutils
 from adbutils import adb
@@ -81,6 +81,31 @@ def get_by_status(status: str) -> list:
     return devices
 
 
+class UpdatableTextColumn(ProgressColumn):
+    """
+    This special type of column represent an extension for the original TextColumn
+    provided from rich. With this class you can instantiate an object and call the
+    setter method to update the displayable text.
+    """
+
+    def __init__(self, text: str = '',
+                 table_column: Optional[Column] = None,
+                 style: StyleType = "none",
+                 justify: JustifyMethod = "left"
+                 ):
+        self.text = text
+        self.style = style
+        self.justify = justify
+        super().__init__(table_column=table_column)
+
+    def set_text(self, new_text: str) -> None:
+        self.text = new_text
+
+    def render(self, task: "Task") -> RenderableType:
+        text = Text(self.text, style=self.style, justify=self.justify)
+        return text
+
+
 # COMMANDS
 
 @click.group()
@@ -105,7 +130,13 @@ def masscan(net: str, port: Union[str, int]) -> None:
                          bufsize=10000,
                          stderr=subprocess.STDOUT,
                          universal_newlines=True)
-    with Progress() as progress:
+
+    found_column = UpdatableTextColumn("", justify='center', style='bold green')
+    with Progress(
+        SpinnerColumn(spinner_name='dots', finished_text='✔'),
+        *Progress.get_default_columns(),
+        found_column
+    ) as progress:
         scan_task = progress.add_task('[yellow bold]Performing masscan', total=100.00)
         while (line := p.stdout.readline()) != '':
             if '%' not in line:
@@ -117,7 +148,7 @@ def masscan(net: str, port: Union[str, int]) -> None:
                 if 'waiting' in fields[2]:
                     progress.console.print(fields[2], end='\r')
                 else:
-                    progress.console.print(fields[3].strip().replace('\n', ''))
+                    found_column.set_text(fields[3].strip().replace('\n', '').upper())
                 progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
 
 
@@ -226,7 +257,7 @@ def broadcast_command() -> None:
         console.print(f'[bold red]You need to type something.[/]')
         return
 
-    for item in track(devices):
+    for item in track(devices, description='[bold yellow]Executing[/]'):
         device = adb.device(item.serial)
         output[item.serial] = item.serial + 'EOL' + device.shell(command)
     console.print('[bold green]DONE[/]')
@@ -242,7 +273,7 @@ def broadcast_command() -> None:
                 console.print('You obtained some results, do you wanna display them? [cyan](Y/n)[/] ', end='')
                 answer = console.input()
 
-                if answer == 'Y' or answer == 'y' or answer == 'YES' or answer == 'yes':
+                if answer == 'Y' or answer == 'y' or answer == 'YES' or answer == 'yes' or answer == '':
                     table = Table(expand=True, show_lines=True)
                     table.add_column("Device", style="cyan bold", justify='center')
                     table.add_column("Output", style="cyan bold", justify='left')
