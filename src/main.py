@@ -133,7 +133,6 @@ class UpdatableTextColumn(ProgressColumn):
         return text
 
 
-# TODO: add code to on_click()
 class Device(Widget):
     """Widget that displays a device"""
 
