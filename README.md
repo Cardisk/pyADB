@@ -212,6 +212,9 @@ Note: `path/to/file.apk` can also be an `url/to/file.apk` just like [adbutils](h
 
 ## Scrcpy
 
+Scrcpy is a powerful tool that allow you to copy the source of a screen from a remote device.
+You can find more information about it, [here](https://github.com/Genymobile/scrcpy).
+
 This command launches a [textual](https://github.com/Textualize/textual) app that displays all the devices connected.
 Clicking on a device, automatically, scrcpy starts sourcing the screen device.
 
