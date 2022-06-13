@@ -2,8 +2,8 @@
 
 ## Introduction
 
-This tool is written entirely in python and it represent a wrapper for ADB from platform-tools.
-The idea came out when we was playing with an interactive whiteboard and we found out that is based on Android.
+This tool is written entirely in python, and it represents a wrapper for ADB from platform-tools.
+The idea came out when we were playing with an interactive whiteboard, so we found out that is based on Android.
 
 **THE USAGE OF THIS TOOL IS NOT INTENDED TO DAMAGE NO ONE AND WE DON'T TAKE ANY RESPONSIBILITY FOR ITS BAD USAGE.**
 
@@ -23,7 +23,7 @@ There are various commands that wrap the functionality implemented by ADB itself
 * [clear](#clear)
 * [kill-server](#kill-server)
 
-For all the commands is present an help page accessible by typing:
+For all the commands is present a help page accessible by typing:
 
     $ python3 main.py <commnad> --help/-h
 
@@ -55,7 +55,7 @@ This command will:
 ## Load
 
 This command allows you to load into a cache file all the devices situated in `devices.json` that the program found during `masscan`.
-If a diffrent file is passed to this command, it will check its existance and then do the same job of the default one.
+If a different file is passed to this command, it will check its existence and then do the same job of the default one.
 
 This command wrapper takes only one optional argument:
 * `--file/-f file_name`
@@ -65,9 +65,9 @@ Usage:
     $ python3 main.py load
 
 This line will:
-* check the existance of the file, in this case `devices.json`
+* check the existence of the file, in this case `devices.json`
 * reads from it all the content
-* extracts only the information requiered (socket address)
+* extracts only the information required (socket address)
 * iterate on a list to check if the sockets are opened on port `5555`, if not it will discard the item
 * saves the information on a cache file
 
@@ -90,7 +90,7 @@ This command will:
 * try to connect to all the devices
 * print the result
 
-If the option `--socket/-s socket_address` was present, this command had try to connect only to that.
+If the option `--socket/-s socket_address` was present, this command had tried to connect only to that.
 
 [Back](#commands)
 
@@ -118,7 +118,7 @@ Usage:
     
 This command will:
 * iterate on all the devices connected and pass the command to them
-* if at least a device returned a result it will ask to the user if he wants to see the results
+* if at least a device returned a result it will ask the user if he wants to see the results
 * if the answer is yes (default) it will print a table with the output
 
 [Back](#commands)
@@ -126,7 +126,7 @@ This command will:
 
 ## Push
 
-By default adb api has the possibility to push files into a remote directory. This command wrapper does just this.
+By default, adb api has the possibility to push files into a remote directory. This command wrapper does just this.
 
 This command wrapper takes two parameters:
 * first: `local_file`
@@ -146,7 +146,7 @@ This will:
 
 ## Pull
 
-By default adb api has also the possibility to pull files from a remote directory. This command wrapper does just this.
+By default, adb api has also the possibility to pull files from a remote directory. This command wrapper does just this.
 
 This command wrapper takes three parameters:
 * first: `host:port`
