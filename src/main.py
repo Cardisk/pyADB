@@ -153,11 +153,13 @@ class Device(Widget):
         self.mouse_over = False
 
     def on_click(self, event: Click) -> None:
-        pass
+        if '5555' in self.title:
+            subprocess.Popen(['scrcpy', f'--tcpip={self.title}'])
+        else:
+            pass
 
     def render(self) -> RenderableType:
         obj = Align.center(Text(self.title), style=self.text_color, vertical='middle')
-
         return Panel(obj, style=(self.hover_color if self.mouse_over else ''))
 
 
