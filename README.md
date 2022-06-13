@@ -149,9 +149,12 @@ This will:
 
 By default, adb api has the possibility to push files into a remote directory. This command wrapper does just this.
 
-This command wrapper takes two parameters:
+This command wrapper takes a max of three parameters:
 * first: `local_file`
 * second: `remote/absolute/path`
+* third: `--socket/-s socket_address`
+
+If the third option is specified, the local_file will be pushed only to that.
 
 Usage:
 
