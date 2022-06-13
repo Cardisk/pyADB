@@ -5,6 +5,12 @@ from json import JSONDecodeError
 from rich.console import Console, RenderableType
 from rich.progress import track, Progress, Column, Text, StyleType, Task, JustifyMethod, ProgressColumn, SpinnerColumn
 from rich.table import Table
+from rich.align import Align
+from rich.panel import Panel
+from textual.widget import Widget
+from textual.app import App
+from textual.reactive import Reactive
+from textual.events import *
 import adbutils
 from adbutils import adb
 from time import sleep
@@ -125,6 +131,52 @@ class UpdatableTextColumn(ProgressColumn):
     def render(self, task: "Task") -> RenderableType:
         text = Text(self.text, style=self.style, justify=self.justify)
         return text
+
+
+# TODO: add code to on_click()
+class Device(Widget):
+    """Widget that displays a device"""
+
+    title = Reactive('')
+    mouse_over = Reactive(False)
+
+    def __init__(self, title: str, hover_color: str, text_color: str):
+        super(Device, self).__init__('')
+        self.title = title
+        self.hover_color = hover_color
+        self.text_color = text_color
+
+    def on_enter(self) -> None:
+        self.mouse_over = True
+
+    def on_leave(self) -> None:
+        self.mouse_over = False
+
+    def on_click(self, event: Click) -> None:
+        pass
+
+    def render(self) -> RenderableType:
+        obj = Align.center(Text(self.title), style=self.text_color, vertical='middle')
+
+        return Panel(obj, style=(self.hover_color if self.mouse_over else ''))
+
+
+class Display(App):
+    """App run when scrcpy command is launched"""
+
+    async def on_load(self) -> None:
+        await self.bind('q', 'quit')
+
+    async def on_mount(self) -> None:
+        connected = get_by_status('device')
+        if len(connected) > 0:
+            devices = (Device(item.serial, hover_color='on red', text_color='bold green') for item in connected)
+            await self.view.dock(*devices, edge='top')
+        else:
+            await self.view.dock(
+                Device('No devices connected. Press \'Q\' to exit.', hover_color='', text_color='bold red'),
+                edge='top'
+            )
 
 
 # COMMANDS
@@ -534,6 +586,24 @@ def install(apk: str) -> None:
         console.print('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
     else:
         console.print('[bold red]Something went wrong during the installation[/]')
+
+
+@cli.command()
+@click.option('-s', '--socket', help='Specific device')
+def scrcpy(socket) -> None:
+    """
+    Launches a textual app with a list of connected sockets.
+    Clicking on a socket panel it will automatically start scrcpy for that device
+
+    :Usage example: python3 main.py scrcpy
+
+    :param socket: Specific socket to display
+    """
+
+    if not socket:
+        Display.run()
+    else:
+        subprocess.Popen(['scrcpy', f'--tcpip={socket}'])
 
 
 @cli.command('clear')
