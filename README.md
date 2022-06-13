@@ -12,16 +12,20 @@ The idea came out when we was playing with an interactive whiteboard and we foun
 
 There are various commands that wrap the functionality implemented by ADB itself.
 
-* masscan
-* load
-* connect
-* show
-* broad-cmd
-* push
-* install
-* clear
-* kill-server
+* [masscan](#masscan)
+* [load](#load)
+* [connect](#connect)
+* [show](#show)
+* [broad-cmd](#broad-cmd)
+* [push](#push)
+* [pull](#pull)
+* [install](#install)
+* [clear](#clear)
+* [kill-server](#kill-server)
 
+For all the commands is present an help page accessible by typing:
+
+    $ python3 main.py <commnad> --help/-h
 
 ## Masscan
 
@@ -29,18 +33,23 @@ Masscan is a powerful tool that can easily scan a net on a specified port or ran
 If any service is found listening on the given parameters it will print it at the end of the execution.
 For more details you can go to this repository: [masscan](https://github.com/robertdavidgraham/masscan).
 
-This command wrapper takes two arguments:
-* `--net/-n network/subnetmask`
-* `--port/-p port/s`
+This command wrapper takes a max of three parameters:
+* first: `network/mask`
+* second: `port or range`
+* third (optional): `--ipv6`
 
-First of all open a terminal.
+If `--ipv6` flag is set, you can use an ipv6 network/mask address.
 
-    $ python3 main.py masscan --net 192.168.1.0/24 --port 80-100,5555
+Usage:
+
+    $ python3 main.py masscan 192.168.1.0/24 80-100,5555
 
 This command will:
 * scan the net `192.168.1.0` with a subnet mask of 24 bits `(255.255.255.0)`
-* scan the devices on the net on the range of ports `80-100` and on `5555` port
+* scan the devices on the net on the range of ports `80-100` and on `5555`
 * output the result on a file named `devices.json`
+
+[Back](#commands)
 
 
 ## Load
@@ -51,7 +60,7 @@ If a diffrent file is passed to this command, it will check its existance and th
 This command wrapper takes only one optional argument:
 * `--file/-f file_name`
 
-In a terminal:
+Usage:
 
     $ python3 main.py load
 
@@ -62,6 +71,8 @@ This line will:
 * iterate on a list to check if the sockets are opened on port `5555`, if not it will discard the item
 * saves the information on a cache file
 
+[Back](#commands)
+
 
 ## Connect
 
@@ -70,7 +81,7 @@ With this command the program tries to connect to all the devices loaded into th
 It can also take one argument:
 * `--socket/-s socket_address`
 
-In a terminal:
+Usage:
 
     $ python3 main.py connect
 
@@ -81,59 +92,87 @@ This command will:
 
 If the option `--socket/-s socket_address` was present, this command had try to connect only to that.
 
+[Back](#commands)
+
 
 ## Show
 
-The `show` command will display a table of all the connected devices.
+This command will display a table of all the connected devices.
 
-In a terminal:
+Usage:
 
     $ python3 main.py show
 
 The content of the table represent all the device information that can be retrieved with [adbutils](https://github.com/openatx/adbutils) module.
+
+[Back](#commands)
 
 
 ## Broad-cmd
 
 This command name stands for `broadcast-command`. It will execute the given command to all the devices connected.
 
-In a terminal:
+Usage:
 
-    $ python3 main.py broad-cmd
+    $ python3 main.py broad-cmd <command>
     
 This command will:
-* wait for a user command throught the input() python function
 * iterate on all the devices connected and pass the command to them
-* if at least a device returned a result it will ask to the user if he want to see the results
+* if at least a device returned a result it will ask to the user if he wants to see the results
 * if the answer is yes (default) it will print a table with the output
+
+[Back](#commands)
 
 
 ## Push
 
-By default `adb` api has the possibility to push files into a remote directory. This command wrapper does just this.
+By default adb api has the possibility to push files into a remote directory. This command wrapper does just this.
 
-It takes two arguments:
-* `--local/-l local_file`
-* `--remote/-r remote_absolute_path`
+This command wrapper takes two parameters:
+* first: `local_file`
+* second: `remote/absolute/path`
 
-In a terminal:
+Usage:
 
-    $ python3 main.py push -l some_funny_text.txt -r /sdcard/some_funny_text.txt
+    $ python3 main.py push some_funny_text.txt /sdcard
     
 This will:
 * check if the remote directory is an absolute path
-* check if the remote directory path contains the local file name, if not it will just appends it
+* check if the remote directory path string contains the local file name, if not it will just append it
 * push the file into all the devices
+
+[Back](#commands)
+
+
+## Pull
+
+By default adb api has also the possibility to pull files from a remote directory. This command wrapper does just this.
+
+This command wrapper takes three parameters:
+* first: `host:port`
+* second: `remote/absolute/path/to/file`
+* third: `local_file_name`
+
+Usage:
+    
+    $ python3 main.py pull 192.168.1.10:5555 /sdcard/remote.txt local.txt
+    
+This command will:
+* check if the remote host is connected
+* check if the remote path is absolute
+* pull the remote file into the local machine
+
+[Back](#commands)
 
 
 ## Install
 
-The `install` command will push and install a `file.apk` into all the connected devices.
+This command will push and install an apk into all the connected devices.
 
 The command wrapper require only an argument:
-* `--apk/-a path/to/file.apk`
+* `path/to/file.apk`
 
-In a terminal:
+Usage:
 
     $ python3 main.py install path/to/file.apk
     
@@ -143,21 +182,26 @@ This will:
 
 Note: `path/to/file.apk` can also be an `url/to/file.apk` just like [adbutils](https://github.com/openatx/adbutils) documentation says.
 
+[Back](#commands)
+
 
 ## Clear
 
-This command is not a wrapper for any `adb` functionality. It just removes the cache directory and all its content.
+This command is not a wrapper for any adb functionality. It just removes the cache directory and all its content.
 
-In a terminal:
+Usage:
 
     $ python3 main.py clear
-    
+
+[Back](#commands)
+
 
 ## Kill-server
 
-This command wrapper emulates the functionality of `adb kill-server`. Its job is not to kill adb daemon but only to disconnect all the devices.
+This command wrapper emulates the functionality of `adb kill-server`. Its job is not to kill adb's daemon but only to disconnect all the devices.
 
-In a terminal:
+Usage:
 
     $ python3 main.py kill-server
 
+[Back](#commands)
