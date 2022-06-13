@@ -399,16 +399,21 @@ def execute(socket: str, command: str) -> None:
 @click.help_option('-h', '--help')
 @click.argument('local', nargs=1, required=True)
 @click.argument('remote', nargs=1, required=True)
-def push_file(local: str, remote: str) -> None:
+@click.option('-s', '--socket', help='Specific device (socket address)')
+def push_file(local: str, remote: str, socket: str) -> None:
     """
     Pushes a local file into all the remote machines.
     The remote path has to be absolute.
+    If the argument --socket is specified the file
+    will be pushed only to that.
 
     :Usage example: python3 main.py push example.txt /sdcard
 
     :param local: Local file
 
     :param remote: Remote destination
+
+    :param socket: Specific device
     """
 
     if len(adb.device_list()) == 0:
@@ -428,17 +433,28 @@ def push_file(local: str, remote: str) -> None:
         remote = os.path.join(remote, filename)
 
     success = False
-    devices = get_by_status('device')
 
-    for item in track(devices, description='Pushing'):
+    if not socket:
+        devices = get_by_status('device')
+
+        for item in track(devices, description='Pushing'):
+            try:
+                device = adb.device(item.serial)
+                device.sync.push(str(local), str(remote))
+                success = True
+            except Union[TypeError, RuntimeError, adbutils.AdbError]:
+                continue
+    else:
         try:
-            device = adb.device(item.serial)
+            device = adb.device(socket)
             device.sync.push(str(local), str(remote))
             success = True
         except Union[TypeError, RuntimeError, adbutils.AdbError]:
-            continue
+            pass
+
     if success is True:
-        console.print('[bold green]PUSH:[/] your little file is now property of everyone!')
+        who = socket if socket else 'everyone'
+        console.print(f'[bold green]PUSH:[/] your little file is now property of {who}!')
     else:
         console.print('[bold red]Something went wrong during the transfer[/]')
 
