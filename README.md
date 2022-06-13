@@ -17,6 +17,7 @@ There are various commands that wrap the functionality implemented by ADB itself
 * [connect](#connect)
 * [show](#show)
 * [broad-cmd](#broad-cmd)
+* [exec](#exec)
 * [push](#push)
 * [pull](#pull)
 * [install](#install)
@@ -25,7 +26,7 @@ There are various commands that wrap the functionality implemented by ADB itself
 
 For all the commands is present a help page accessible by typing:
 
-    $ python3 main.py <commnad> --help/-h
+    $ python3 main.py <command> --help/-h
 
 ## Masscan
 
@@ -120,6 +121,26 @@ This command will:
 * iterate on all the devices connected and pass the command to them
 * if at least a device returned a result it will ask the user if he wants to see the results
 * if the answer is yes (default) it will print a table with the output
+
+[Back](#commands)
+
+
+## Exec
+
+This will execute the given command to the given remote device.
+
+This wrapper takes two arguments:
+* first: **socket_address**
+* second: **command**
+
+Usage:
+
+    $ python3 main.py exec 192.168.1.10:5555 <command>
+
+This will:
+* check if the remote host is connected
+* executes the command to the given host
+* if an output is returned it will print it out
 
 [Back](#commands)
 
