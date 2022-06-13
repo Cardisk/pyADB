@@ -251,6 +251,7 @@ def connect(socket: str) -> None:
     """
 
     success = False
+    connection = None
     if not socket:
         devices = cache_recall('devices')
         with console.status('[yellow]Connecting devices[/]', spinner='dots'):
@@ -262,12 +263,18 @@ def connect(socket: str) -> None:
                     continue
     else:
         try:
-            adb.connect(socket, timeout=2.0)
+            connection = adb.connect(socket, timeout=2.0)
             success = True
         except adbutils.AdbTimeout:
             pass
     if success is True:
-        console.print('[green bold]CONNECTED:[/] wow! You\'re not alone!')
+        if connection is not None:
+            if 'failed' in connection or 'unable' in connection or 'already' in connection:
+                console.print(f'[bold red]ERROR:[/] {connection}')
+            else:
+                console.print(f'[bold green]CONNECTED:[/] you\'re now friend of {socket}!')
+        else:
+            console.print('[green bold]CONNECTED:[/] wow! You\'re not alone!')
     else:
         console.print('[bold red]Something went wrong during the connection[/]')
 
@@ -375,6 +382,7 @@ def execute(socket: str, command: str) -> None:
         console.print(f'[bold red]There is no command to execute.[/]')
         return
 
+    output = ''
     try:
         device = adb.device(socket)
         output = device.shell()
