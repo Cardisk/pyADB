@@ -3,7 +3,7 @@ import subprocess
 import json
 from json import JSONDecodeError
 from rich.console import Console, RenderableType
-from rich.progress import track, Progress, Column, Text, StyleType, JustifyMethod, ProgressColumn, SpinnerColumn
+from rich.progress import track, Progress, Column, Text, StyleType, Task, JustifyMethod, ProgressColumn, SpinnerColumn
 from rich.table import Table
 import adbutils
 from adbutils import adb
@@ -69,8 +69,8 @@ def get_by_status(status: str) -> list:
     """
     Utility function to get devices by status.
 
-    :param status:
-    :return: list
+    :param status: Status
+    :return: A list
     """
 
     device_tracker = adb.track_devices()
@@ -79,6 +79,27 @@ def get_by_status(status: str) -> list:
         if device.status == status:
             devices.append(device)
     return devices
+
+
+def connected_devices() -> Table:
+    """
+    Creates a table containing all the devices connected.
+
+    :return: A table
+    """
+
+    table = Table(expand=True, show_lines=True)
+    table.add_column("Devices address", style="cyan bold")
+    table.add_column("Present", style="cyan bold")
+    table.add_column("ADB status", style="cyan bold")
+
+    devices = get_by_status('device')
+
+    with console.status('[yellow]Executing[/]', spinner='dots'):
+        for device in devices:
+            table.add_row(str(device.serial), str(device.present), str(device.status))
+
+    return table
 
 
 class UpdatableTextColumn(ProgressColumn):
@@ -114,17 +135,45 @@ def cli():
 
 
 @cli.command()
-@click.option('-n', '--net', help='Where you need to perform you masscan [type: NET/MASK]', required=True)
-@click.option('-p', '--port', help='Port range that you want to check [type: X or XX-YY or X,YY-ZZ]', required=True)
-def masscan(net: str, port: Union[str, int]) -> None:
+@click.help_option('-h', '--help')
+@click.argument('net', nargs=1, required=True)
+@click.argument('port', nargs=1, required=True)
+@click.option('--ipv6', help='IPV6 flag', is_flag=True)
+def masscan(net: str, port: Union[str, int], ipv6: bool) -> None:
     """
     Performs a masscan on the given net (example: 192.168.1.0/24)
-    and check if there are services listening to the given port or range.
+    and check if there are services listening to the given port or range
+    (example1: 80; example2: 80-100; example3: 80,90-100).
+    It can accept both ipv4 and ipv6 addresses but if you want to use the
+    second type, you need to specify --ipv6 flag.
+    When typing the address, the network mask has to be specified with its
+    bit representation, like in the example above.
+
+    :Usage example: python3 main.py masscan 192.168.1.0/24 80
 
     :param net: Network/Mask
-    :param port: Port or range of port (example1: 80, example2: 80-100, example3: 80,90-100)
-    :return: None
+
+    :param port: Port or range of ports
+
+    :param ipv6: Flag to know if the passed address is ipv6
     """
+
+    if not net or not port:
+        console.print('[bold red]You need to provide both network/mask and port/s[/]')
+        return
+
+    # ipv4 validation TODO: may also add ipv6 validation
+    if not ipv6:
+        socket_components = net.split('/')
+        if len((network := socket_components[0]).split('.')) != 4:
+            console.print(f'[bold red]ERROR:[/] {network} is not a valid IPV4 address.')
+            return
+
+        if len(mask := socket_components[1]) > 2:
+            console.print(
+                f'[bold red]ERROR:[/] {mask} is not a valid representation of a bit mask [cyan](example: .../24)[/]'
+            )
+            return
 
     p = subprocess.Popen(['masscan', net, '-p', port, '-oJ', 'devices.json'], stdout=subprocess.PIPE,
                          bufsize=10000,
@@ -132,10 +181,12 @@ def masscan(net: str, port: Union[str, int]) -> None:
                          universal_newlines=True)
 
     found_column = UpdatableTextColumn("", justify='center', style='bold green')
+    waiting_column = UpdatableTextColumn("", justify='center', style='bold blue')
     with Progress(
-        SpinnerColumn(spinner_name='dots', finished_text='✔'),
-        *Progress.get_default_columns(),
-        found_column
+            SpinnerColumn(spinner_name='dots', finished_text='✔'),
+            *Progress.get_default_columns(),
+            found_column,
+            waiting_column
     ) as progress:
         scan_task = progress.add_task('[yellow bold]Performing masscan', total=100.00)
         while (line := p.stdout.readline()) != '':
@@ -146,22 +197,26 @@ def masscan(net: str, port: Union[str, int]) -> None:
             else:
                 fields = line.split(',')
                 if 'waiting' in fields[2]:
-                    progress.console.print(fields[2], end='\r')
+                    waiting_column.set_text(fields[2].strip().replace('-secs', 's'))
                 else:
                     found_column.set_text(fields[3].strip().replace('\n', '').upper())
                 progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
 
 
 @cli.command()
+@click.help_option('-h', '--help')
 @click.option('-f', '--file', help='JSON file containing the result of a masscan search', default='devices.json')
 def load(file: str) -> None:
     """
     Loads the sockets found by masscan command into a cache_file.
-    It can also load into the same file the content of another masscan JSON output file, given as a parameter.
+    You can also provide a different file specifying the path/to/file.json with --file option.
+    Note that only sockets with ADB port open will be considered.
 
-    :param file: File -- default: devices.json
-    :return: None
+    :Usage example: python3 main.py load
+
+    :param file: File (default: devices.json)
     """
+
     if not os.path.exists('./' + file):
         console.print(f'[bold red]ERROR[/]: {file} does not exist.')
         return
@@ -184,13 +239,15 @@ def load(file: str) -> None:
 
 
 @cli.command()
-@click.option('-s', '--socket', help='Specific socket address that needs to be connected')
+@click.help_option('-h', '--help')
+@click.option('-s', '--socket', help='Specific socket address')
 def connect(socket: str) -> None:
     """
-    Connects all the devices found int the cache_file to the given adb session.
+    Connects all the devices found into the cache_file to the given adb session.
 
-    :param socket: Socket
-    :return: None
+    :Usage example: python3 main.py connect
+
+    :param socket: Specific socket to connect
     """
 
     success = False
@@ -216,56 +273,48 @@ def connect(socket: str) -> None:
 
 
 @cli.command('show')
+@click.help_option('-h', '--help')
 def show_devices() -> None:
     """
     Shows a table with the information of the connected devices.
 
-    :return: None
+    :Usage example: python3 main.py show
     """
-
-    table = Table(expand=True, show_lines=True)
-    table.add_column("Devices address", style="cyan bold")
-    table.add_column("Present", style="cyan bold")
-    table.add_column("ADB status", style="cyan bold")
-
-    devices = get_by_status('device')
-
-    for device in track(devices, description='[yellow]Executing[/]'):
-        table.add_row(str(device.serial), str(device.present), str(device.status))
-
-    console.print(table)
+    console.print(connected_devices())
 
 
 @cli.command('broad-cmd')
-def broadcast_command() -> None:
+@click.help_option('-h', '--help')
+@click.argument('command', nargs=-1)
+def broadcast_command(command: str) -> None:
     """
     Executes a shell command to all the connected devices.
+    If at least one device returned an output, the user can choose
+    if he wants to see it or not.
 
-    :return: None
+    :Usage example: python3 main.py broad-cmd ls -l
     """
 
     if len(adb.device_list()) == 0:
         console.print('[bold red]No devices connected.[/]')
         return
 
+    if not command:
+        console.print(f'[bold red]There is no command to execute.[/]')
+        return
+
     output = dict()
     devices = get_by_status('device')
 
-    command = console.input('[cyan]$[/] ')
-
-    if not command:
-        console.print(f'[bold red]You need to type something.[/]')
-        return
-
     for item in track(devices, description='[bold yellow]Executing[/]'):
         device = adb.device(item.serial)
-        output[item.serial] = item.serial + 'EOL' + device.shell(command)
+        output[item.serial] = device.shell(command)
     console.print('[bold green]DONE[/]')
 
     if len(output) > 0:
         check = False
-        for key in output:
-            if len(output[key].split("EOL")[1]) > 0:
+        for key in output.keys():
+            if len(output.get(key)) > 0:
                 check = True
                 break
         if check:
@@ -278,11 +327,8 @@ def broadcast_command() -> None:
                     table.add_column("Device", style="cyan bold", justify='center')
                     table.add_column("Output", style="cyan bold", justify='left')
 
-                    for key in output:
-                        group = output[key].split('EOL')
-                        if len(group) > 2:
-                            continue
-                        table.add_row(group[0], group[1])
+                    for key in output.keys():
+                        table.add_row(key, output.get(key))
 
                     console.print(table)
                     break
@@ -298,19 +344,27 @@ def broadcast_command() -> None:
 
 
 @cli.command('push')
-@click.option('-l', '--local', help='File in a local path', required=True)
-@click.option('-r', '--remote', help='Remote absolute path', required=True)
+@click.help_option('-h', '--help')
+@click.argument('local', nargs=1, required=True)
+@click.argument('remote', nargs=1, required=True)
 def push_file(local: str, remote: str) -> None:
     """
     Pushes a local file into all the remote machines.
+    The remote path has to be absolute.
+
+    :Usage example: python3 main.py push example.txt /sdcard
 
     :param local: Local file
+
     :param remote: Remote destination
-    :return: None
     """
 
     if len(adb.device_list()) == 0:
         console.print('[bold red]No devices connected.[/]')
+        return
+
+    if not local or not remote:
+        console.print('[bold red]You need to provide both local and absolute remote path.[/]')
         return
 
     if not pathlib.PurePath(remote).is_absolute():
@@ -337,19 +391,65 @@ def push_file(local: str, remote: str) -> None:
         console.print('[bold red]Something went wrong during the transfer[/]')
 
 
+@cli.command('pull')
+@click.help_option('-h', '--help')
+@click.argument('socket', nargs=1, required=True)
+@click.argument('remote', nargs=1, required=True)
+@click.argument('local', nargs=1, required=True)
+def pull_file(socket: str, remote: str, local: str) -> None:
+    """
+    Pull a file from the specified remote device into the local one.
+
+    :Usage example: python3 main.py pull 192.168.1.10:5555 /sdcard/remote.txt local.txt
+
+    :param socket: Socket address
+
+    :param remote: Remote path/to/file
+
+    :param local: Local path/to/file
+    """
+
+    devices = get_by_status('device')
+
+    if len(devices) == 0:
+        console.print('[bold red]No devices connected.[/]')
+        return
+
+    if socket not in devices:
+        console.print(f'[bold red]{socket} not connected.[/]')
+        return
+
+    if not pathlib.PurePath(remote).is_absolute():
+        console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
+        return
+
+    try:
+        device = adb.device(socket)
+        device.sync.pull(str(remote), str(local))
+    except adbutils.AdbError:
+        console.print('[bold red]Something went wrong during communication.[/]')
+    console.print(f'[bold green]SUCCESS:[/] you stole {remote} -> {local} little file.')
+
+
 @cli.command()
-@click.option('-a', '--apk', help='Apk file that has to be installed [type: path/file.apk or url/file.apk]',
-              required=True)
+@click.help_option('-h', '--help')
+@click.argument('apk', nargs=1, required=True)
 def install(apk: str) -> None:
     """
     Performs the installation of the given apk on all the connected devices.
+    The apk can be bot a path/to/file.apk and url/to/file.apk
+
+    :Usage example: python3 main.py install application.apk
 
     :param apk: Apk file
-    :return: None
     """
 
     if len(adb.device_list()) == 0:
         console.print('[bold red]No devices connected.[/]')
+        return
+
+    if not apk:
+        console.print('[bold red]You need to provide an apk file.[/]')
         return
 
     success = False
@@ -360,11 +460,7 @@ def install(apk: str) -> None:
             device = adb.device(item.serial)
             device.install(apk)
             success = True
-        except RuntimeError:
-            continue
-        except TypeError:
-            continue
-        except adbutils.AdbError:
+        except Union[RuntimeError, TypeError, adbutils.AdbError, adbutils.AdbInstallError]:
             continue
     if success is True:
         console.print('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
@@ -373,12 +469,9 @@ def install(apk: str) -> None:
 
 
 @cli.command('clear')
+@click.help_option('-h', '--help')
 def clear_cache() -> None:
-    """
-    Removes all the cache elements to free some space.
-
-    :return: None
-    """
+    """Removes all the cache elements to free some space."""
 
     with console.status('[yellow]Cleaning[/]', spinner='dots'):
         if os.path.exists(user_cache_dir(cache_name, cache_author)):
@@ -387,12 +480,9 @@ def clear_cache() -> None:
 
 
 @cli.command('kill-server')
+@click.help_option('-h', '--help')
 def kill_server() -> None:
-    """
-    Emulates the adb kill-server command. All the devices will be disconnected from this adb session.
-
-    :return: None
-    """
+    """Emulates the adb kill-server command. All the devices will be disconnected from this adb session."""
 
     devices = get_by_status('device')
     for item in track(devices, description='[yellow]Disconnecting[/]'):
