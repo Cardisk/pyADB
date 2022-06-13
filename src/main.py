@@ -537,11 +537,12 @@ def kill_server() -> None:
     """Emulates the adb kill-server command. All the devices will be disconnected from this adb session."""
 
     devices = get_by_status('device')
-    for item in track(devices, description='[yellow]Disconnecting[/]'):
-        try:
-            adb.disconnect(item.serial)
-        except adbutils.AdbError:
-            continue
+    with console.status('[yellow]Disconnecting[/]', spinner='dots'):
+        for item in devices:
+            try:
+                adb.disconnect(item.serial)
+            except adbutils.AdbError:
+                continue
     console.print('[bold red]DISCONNECTED:[/] everything fine, but now you are alone.')
 
 
