@@ -285,14 +285,16 @@ def show_devices() -> None:
 
 @cli.command('broad-cmd')
 @click.help_option('-h', '--help')
-@click.argument('command', nargs=-1)
+@click.argument('command', nargs=-1, required=True)
 def broadcast_command(command: str) -> None:
     """
     Executes a shell command to all the connected devices.
     If at least one device returned an output, the user can choose
     if he wants to see it or not.
 
-    :Usage example: python3 main.py broad-cmd ls -l
+    :Usage example: python3 main.py broad-cmd <command>
+
+    :param command: Command
     """
 
     if len(adb.device_list()) == 0:
@@ -340,7 +342,49 @@ def broadcast_command(command: str) -> None:
                     console.print('[bold red]Please type only (Y/n) letters.[/]', end='\r')
                     sleep(2)
         else:
-            console.print('[blue]There is no output for your command[/]')
+            console.print('[blue]No output returned.[/]')
+
+
+@cli.command('exec')
+@click.help_option('-h', '--help')
+@click.argument('socket', nargs=1, required=True)
+@click.argument('command', nargs=-1, required=True)
+def execute(socket: str, command: str) -> None:
+    """
+    Execute the given command to the given remote device.
+    If an output is returned it will print it.
+
+    :Usage example: python3 main.py 192.168.1.10:5555 <command>
+
+    :param socket: Socket address
+
+    :param command: Command
+    """
+
+    devices = get_by_status('device')
+
+    if len(devices) == 0:
+        console.print('[bold red]No devices connected.[/]')
+        return
+
+    if socket not in devices:
+        console.print(f'[bold red]{socket} not connected.[/]')
+        return
+
+    if not command:
+        console.print(f'[bold red]There is no command to execute.[/]')
+        return
+
+    try:
+        device = adb.device(socket)
+        output = device.shell()
+    except adbutils.AdbError:
+        console.print('[bold red]Something went wrong during the execution.[/]')
+
+    if len(output > 0):
+        console.print(f'[bold green]OUTPUT:[/] {output}')
+    else:
+        console.print('[blue]No output returned.[/]')
 
 
 @cli.command('push')
