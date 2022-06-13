@@ -21,6 +21,7 @@ There are various commands that wrap the functionality implemented by ADB itself
 * [push](#push)
 * [pull](#pull)
 * [install](#install)
+* [scrcpy](#scrcpy)
 * [clear](#clear)
 * [kill-server](#kill-server)
 
@@ -205,6 +206,29 @@ This will:
 * install the apk file into all the devices
 
 Note: `path/to/file.apk` can also be an `url/to/file.apk` just like [adbutils](https://github.com/openatx/adbutils) documentation says.
+
+[Back](#commands)
+
+
+## Scrcpy
+
+This command launches a [textual](https://github.com/Textualize/textual) app that displays all the devices connected.
+Clicking on a device, automatically, scrcpy starts sourcing the screen device.
+
+This command can take a parameter:
+* `--socket/-s socket_address`
+
+Usage:
+
+    $ python3 main.py scrcpy
+
+This line will:
+* check if a specific socket address has been passed
+* run the textual app
+* if a device is clicked launches the respective scrcpy
+* wait for 'Q' to be pressed to stop the execution of the command
+
+If a specific socket is provided, it will only display the corresponding scrcpy.
 
 [Back](#commands)
 
