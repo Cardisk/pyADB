@@ -63,8 +63,9 @@ def cache_recall(name: str) -> Optional[Set[Any]]:
         os.mkdir(user_cache_dir(cache_name, cache_author))
 
     if not os.path.exists(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl'):
-        console.print(f'[red]CACHE[/]: {name} does not exist.')
-        return
+        console.print(f'[red]CACHE[/]: {name}.pkl does not exist.')
+        sys.exit()
+
     with open(user_cache_dir(cache_name, cache_author) + '/' + name + '.pkl', 'rb') as f:
         obj = pickle.load(f)
     console.print(f'[green]CACHE[/]: {obj} loaded from cache.')
@@ -153,7 +154,7 @@ class Device(Widget):
 
     def on_click(self, event: Click) -> None:
         if '5555' in self.title:
-            subprocess.Popen(['scrcpy', f'--tcpip={self.title}'])
+            subprocess.run(['scrcpy', f'--tcpip={self.title}'], capture_output=True)
         else:
             pass
 
@@ -212,7 +213,7 @@ def masscan(net: str, port: Union[str, int], ipv6: bool) -> None:
     """
 
     if not net or not port:
-        console.print('[bold red]You need to provide both network/mask and port/s[/]')
+        console.print('[bold red]You need to provide both network/mask and port or range.[/]')
         return
 
     # ipv4 validation TODO: may also add ipv6 validation
@@ -228,32 +229,34 @@ def masscan(net: str, port: Union[str, int], ipv6: bool) -> None:
             )
             return
 
-    p = subprocess.Popen(['masscan', net, '-p', port, '-oJ', 'devices.json'], stdout=subprocess.PIPE,
-                         bufsize=10000,
-                         stderr=subprocess.STDOUT,
-                         universal_newlines=True)
+    print('here')
 
-    found_column = UpdatableTextColumn("", justify='center', style='bold green')
-    waiting_column = UpdatableTextColumn("", justify='center', style='bold blue')
-    with Progress(
-            SpinnerColumn(spinner_name='dots', finished_text='✔'),
-            *Progress.get_default_columns(),
-            found_column,
-            waiting_column
-    ) as progress:
-        scan_task = progress.add_task('[yellow bold]Performing masscan', total=100.00)
-        while (line := p.stdout.readline()) != '':
-            if '%' not in line:
-                match = re.match(r'[\s]+', line)
-                if match is None:
-                    progress.console.print(f'[cyan bold]SUBPROCESS[/]: {line}', end='')
-            else:
-                fields = line.split(',')
-                if 'waiting' in fields[2]:
-                    waiting_column.set_text(fields[2].strip().replace('-secs', 's'))
+    with subprocess.Popen(['masscan', net, '-p', port, '-oJ', 'devices.json'], stdout=subprocess.PIPE,
+                          bufsize=10000,
+                          stderr=subprocess.STDOUT,
+                          universal_newlines=True) as p:
+
+        found_column = UpdatableTextColumn("", justify='center', style='bold green')
+        waiting_column = UpdatableTextColumn("", justify='center', style='bold blue')
+        with Progress(
+                SpinnerColumn(spinner_name='dots', finished_text='✔'),
+                *Progress.get_default_columns(),
+                found_column,
+                waiting_column
+        ) as progress:
+            scan_task = progress.add_task('[yellow bold]Performing masscan', total=100.00)
+            while (line := p.stdout.readline()) != '':
+                if '%' not in line:
+                    match = re.match(r'[\s]+', line)
+                    if match is None:
+                        progress.console.print(f'[cyan bold]SUBPROCESS[/]: {line}', end='')
                 else:
-                    found_column.set_text(fields[3].strip().replace('\n', '').upper())
-                progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
+                    fields = line.split(',')
+                    if 'waiting' in fields[2]:
+                        waiting_column.set_text(fields[2].strip().replace('-secs', 's'))
+                    else:
+                        found_column.set_text(fields[3].strip().replace('\n', '').upper())
+                    progress.update(scan_task, completed=float(fields[1][:fields[1].rfind('%')]))
 
 
 @cli.command()
@@ -307,6 +310,11 @@ def connect(socket: str) -> None:
     connection = None
     if not socket:
         devices = cache_recall('devices')
+
+        if len(devices) == 0:
+            console.print('[bold red]ERROR:[/] there is no device inside the cache file.')
+            return
+
         with console.status('[yellow]Connecting devices[/]', spinner='dots'):
             for addr in devices:
                 try:
@@ -368,9 +376,10 @@ def broadcast_command(command: str) -> None:
     output = dict()
     devices = get_by_status('device')
 
-    for item in track(devices, description='[bold yellow]Executing[/]'):
-        device = adb.device(item.serial)
-        output[item.serial] = device.shell(command)
+    with console.status('[bold yellow]Executing[/]', spinner='dots'):
+        for item in devices:
+            device = adb.device(item.serial)
+            output[item.serial] = device.shell(command)
     console.print('[bold green]DONE[/]')
 
     if len(output) > 0:
@@ -427,7 +436,12 @@ def execute(socket: str, command: str) -> None:
         console.print('[bold red]No devices connected.[/]')
         return
 
-    if socket not in devices:
+    found = False
+    for item in devices:
+        if item.serial == socket:
+            found = True
+
+    if not found:
         console.print(f'[bold red]{socket} not connected.[/]')
         return
 
@@ -438,11 +452,11 @@ def execute(socket: str, command: str) -> None:
     output = ''
     try:
         device = adb.device(socket)
-        output = device.shell()
+        output = device.shell(command)
     except adbutils.AdbError:
         console.print('[bold red]Something went wrong during the execution.[/]')
 
-    if len(output > 0):
+    if len(output) > 0:
         console.print(f'[bold green]OUTPUT:[/] {output}')
     else:
         console.print('[blue]No output returned.[/]')
@@ -536,7 +550,12 @@ def pull_file(socket: str, remote: str, local: str) -> None:
         console.print('[bold red]No devices connected.[/]')
         return
 
-    if socket not in devices:
+    found = False
+    for item in devices:
+        if item.serial == socket:
+            found = True
+
+    if not found:
         console.print(f'[bold red]{socket} not connected.[/]')
         return
 
@@ -579,9 +598,9 @@ def install(apk: str) -> None:
     for item in track(devices, description='[yellow]Installing items[/]'):
         try:
             device = adb.device(item.serial)
-            device.install(apk)
+            device.install(apk, nolaunch=True, uninstall=True, silent=True)
             success = True
-        except Union[RuntimeError, TypeError, adbutils.AdbError, adbutils.AdbInstallError]:
+        except Union[RuntimeError, TypeError, BrokenPipeError, adbutils.AdbError, adbutils.AdbInstallError]:
             continue
     if success is True:
         console.print('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
@@ -604,7 +623,9 @@ def scrcpy(socket) -> None:
     if not socket:
         Display.run()
     else:
-        subprocess.Popen(['scrcpy', f'--tcpip={socket}'])
+        with console.status('[yellow]Executing[/]', spinner='dots'):
+            subprocess.run(['scrcpy', f'--tcpip={socket}'], capture_output=True)
+        console.print('[bold green]DONE[/]')
 
 
 @cli.command('clear')
