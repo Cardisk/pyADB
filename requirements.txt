@@ -25,3 +25,4 @@ pyparsing~=3.0.9
 setuptools~=57.0.0
 packaging~=21.3
 textual~=0.1.18
+six~=1.15.0
