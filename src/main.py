@@ -44,21 +44,21 @@ def masscan(net: str, port: Union[str, int], ipv6: bool) -> None:
     """
 
     if not net or not port:
-        console.print('[bold red]You need to provide both network/mask and port or range.[/]')
-        return
+        error('[bold red]You need to provide both network/mask and port or range.[/]')
 
     # ipv4 validation TODO: may also add ipv6 validation
     if not ipv6:
         socket_components = net.split('/')
         if len((network := socket_components[0]).split('.')) != 4:
-            console.print(f'[bold red]ERROR:[/] {network} is not a valid IPV4 address.')
-            return
+            error(f'[bold red]ERROR:[/] {network} is not a valid IPV4 address.')
+
+        components = network.split('.')
+        for component in components:
+            if 0 > int(component) > 255:
+                error(f'[bold red]ERROR:[/] {network} is not a valid IPV4 address.')
 
         if len(mask := socket_components[1]) > 2:
-            console.print(
-                f'[bold red]ERROR:[/] {mask} is not a valid representation of a bit mask [cyan](example: .../24)[/]'
-            )
-            return
+            error(f'[bold red]ERROR:[/] {mask} is not a valid representation of a bit mask [cyan](example: .../24)[/]')
 
     with subprocess.Popen(['masscan', net, '-p', port, '-oJ', 'devices.json'], stdout=subprocess.PIPE,
                           bufsize=10000,
@@ -103,16 +103,14 @@ def load(file: str) -> None:
     """
 
     if not os.path.exists('./' + file):
-        console.print(f'[bold red]ERROR[/]: {file} does not exist.')
-        return
+        error(f'[bold red]ERROR[/]: {file} does not exist.')
 
     with open(file, 'r') as f:
         try:
             data = json.load(f)
-            console.print(f'[bold green]SUCCESS[/]: Data got from file {file}')
+            log(f'[bold green]SUCCESS[/]: Data got from file {file}')
         except JSONDecodeError:
-            console.print(f'[bold red]ERROR[/]: Unable to read json data from {file} [cyan](empty?)[/]')
-            return
+            error(f'[bold red]ERROR[/]: Unable to read json data from {file} [cyan](empty?)[/]')
 
     devices = []
     for d in data:
@@ -141,8 +139,7 @@ def connect(socket: str) -> None:
         devices = cache_recall('devices')
 
         if len(devices) == 0:
-            console.print('[bold red]ERROR:[/] there is no device inside the cache file.')
-            return
+            error('[bold red]ERROR:[/] there is no device inside the cache file.')
 
         with console.status('[yellow]Connecting devices[/]', spinner='dots'):
             for addr in devices:
@@ -160,13 +157,13 @@ def connect(socket: str) -> None:
     if success is True:
         if connection is not None:
             if 'failed' in connection or 'unable' in connection or 'already' in connection:
-                console.print(f'[bold red]ERROR:[/] {connection}')
+                error(f'[bold red]ERROR:[/] {connection}')
             else:
-                console.print(f'[bold green]CONNECTED:[/] you\'re now friend of {socket}!')
+                log(f'[bold green]CONNECTED:[/] you\'re now friend of {socket}!')
         else:
-            console.print('[green bold]CONNECTED:[/] wow! You\'re not alone!')
+            log('[green bold]CONNECTED:[/] wow! You\'re not alone!')
     else:
-        console.print('[bold red]Something went wrong during the connection[/]')
+        error('[bold red]Something went wrong during the connection[/]')
 
 
 @cli.command('show')
@@ -177,7 +174,7 @@ def show_devices() -> None:
 
     :Usage example: python3 main.py show
     """
-    console.print(connected_devices())
+    log(connected_devices())
 
 
 @cli.command('broad-cmd')
@@ -195,12 +192,10 @@ def broadcast_command(command: str) -> None:
     """
 
     if len(adb.device_list()) == 0:
-        console.print('[bold red]No devices connected.[/]')
-        return
+        error('[bold red]No devices connected.[/]')
 
     if not command:
-        console.print(f'[bold red]There is no command to execute.[/]')
-        return
+        error(f'[bold red]There is no command to execute.[/]')
 
     output = dict()
     devices = get_by_status('device')
@@ -209,7 +204,7 @@ def broadcast_command(command: str) -> None:
         for item in devices:
             device = adb.device(item.serial)
             output[item.serial] = device.shell(command)
-    console.print('[bold green]DONE[/]')
+    log('[bold green]DONE[/]')
 
     if len(output) > 0:
         check = False
@@ -219,7 +214,7 @@ def broadcast_command(command: str) -> None:
                 break
         if check:
             while True:
-                console.print('You obtained some results, do you wanna display them? [cyan](Y/n)[/] ', end='')
+                log('You obtained some results, do you wanna display them? [cyan](Y/n)[/] ', end='')
                 answer = console.input()
 
                 if answer == 'Y' or answer == 'y' or answer == 'YES' or answer == 'yes' or answer == '':
@@ -230,17 +225,17 @@ def broadcast_command(command: str) -> None:
                     for key in output.keys():
                         table.add_row(key, output.get(key))
 
-                    console.print(table)
+                    log(table)
                     break
 
                 elif answer == 'N' or answer == 'n' or answer == 'NO' or answer == 'no':
                     break
 
                 else:
-                    console.print('[bold red]Please type only (Y/n) letters.[/]', end='\r')
+                    log('[bold red]Please type only (Y/n) letters.[/]', end='\r')
                     sleep(2)
         else:
-            console.print('[blue]No output returned.[/]')
+            log('[blue]No output returned.[/]')
 
 
 @cli.command('exec')
@@ -262,8 +257,7 @@ def execute(socket: str, command: str) -> None:
     devices = get_by_status('device')
 
     if len(devices) == 0:
-        console.print('[bold red]No devices connected.[/]')
-        return
+        error('[bold red]No devices connected.[/]')
 
     found = False
     for item in devices:
@@ -271,24 +265,22 @@ def execute(socket: str, command: str) -> None:
             found = True
 
     if not found:
-        console.print(f'[bold red]{socket} not connected.[/]')
-        return
+        error(f'[bold red]{socket} not connected.[/]')
 
     if not command:
-        console.print(f'[bold red]There is no command to execute.[/]')
-        return
+        error(f'[bold red]There is no command to execute.[/]')
 
     output = ''
     try:
         device = adb.device(socket)
         output = device.shell(command)
     except adbutils.AdbError:
-        console.print('[bold red]Something went wrong during the execution.[/]')
+        error('[bold red]Something went wrong during the execution.[/]')
 
     if len(output) > 0:
-        console.print(f'[bold green]OUTPUT:[/] {output}')
+        log(f'[bold green]OUTPUT:[/] {output}')
     else:
-        console.print('[blue]No output returned.[/]')
+        error('[blue]No output returned.[/]')
 
 
 @cli.command('push')
@@ -313,16 +305,13 @@ def push_file(local: str, remote: str, socket: str) -> None:
     """
 
     if len(adb.device_list()) == 0:
-        console.print('[bold red]No devices connected.[/]')
-        return
+        error('[bold red]No devices connected.[/]')
 
     if not local or not remote:
-        console.print('[bold red]You need to provide both local and absolute remote path.[/]')
-        return
+        error('[bold red]You need to provide both local and absolute remote path.[/]')
 
     if not pathlib.PurePath(remote).is_absolute():
-        console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
-        return
+        error(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
 
     if not remote.endswith(local):
         filename = local.split('/')[-1]
@@ -350,9 +339,9 @@ def push_file(local: str, remote: str, socket: str) -> None:
 
     if success is True:
         who = socket if socket else 'everyone'
-        console.print(f'[bold green]PUSH:[/] your little file is now property of {who}!')
+        log(f'[bold green]PUSH:[/] your little file is now property of {who}!')
     else:
-        console.print('[bold red]Something went wrong during the transfer[/]')
+        error('[bold red]Something went wrong during the transfer[/]')
 
 
 @cli.command('pull')
@@ -376,8 +365,7 @@ def pull_file(socket: str, remote: str, local: str) -> None:
     devices = get_by_status('device')
 
     if len(devices) == 0:
-        console.print('[bold red]No devices connected.[/]')
-        return
+        error('[bold red]No devices connected.[/]')
 
     found = False
     for item in devices:
@@ -385,19 +373,17 @@ def pull_file(socket: str, remote: str, local: str) -> None:
             found = True
 
     if not found:
-        console.print(f'[bold red]{socket} not connected.[/]')
-        return
+        error(f'[bold red]{socket} not connected.[/]')
 
     if not pathlib.PurePath(remote).is_absolute():
-        console.print(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
-        return
+        error(f'[bold red]PATH ERROR:[/] {remote} is not an absolute path.')
 
     try:
         device = adb.device(socket)
         device.sync.pull(str(remote), str(local))
     except adbutils.AdbError:
-        console.print('[bold red]Something went wrong during communication.[/]')
-    console.print(f'[bold green]SUCCESS:[/] you stole {remote} -> {local} little file.')
+        error('[bold red]Something went wrong during communication.[/]')
+    log(f'[bold green]SUCCESS:[/] you stole {remote} -> {local} little file.')
 
 
 @cli.command()
@@ -414,12 +400,10 @@ def install(apk: str) -> None:
     """
 
     if len(adb.device_list()) == 0:
-        console.print('[bold red]No devices connected.[/]')
-        return
+        error('[bold red]No devices connected.[/]')
 
     if not apk:
-        console.print('[bold red]You need to provide an apk file.[/]')
-        return
+        error('[bold red]You need to provide an apk file.[/]')
 
     success = False
     devices = get_by_status('device')
@@ -432,9 +416,9 @@ def install(apk: str) -> None:
         except Union[RuntimeError, TypeError, BrokenPipeError, adbutils.AdbError, adbutils.AdbInstallError]:
             continue
     if success is True:
-        console.print('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
+        log('[bold green]SUCCESS:[/] your brand new app is now available everywhere!')
     else:
-        console.print('[bold red]Something went wrong during the installation[/]')
+        error('[bold red]Something went wrong during the installation[/]')
 
 
 @cli.command()
@@ -454,7 +438,7 @@ def scrcpy(socket) -> None:
     else:
         with console.status('[yellow]Executing[/]', spinner='dots'):
             subprocess.run(['scrcpy', f'--tcpip={socket}'], capture_output=True)
-        console.print('[bold green]DONE[/]')
+        log('[bold green]DONE[/]')
 
 
 @cli.command('clear')
@@ -465,7 +449,7 @@ def clear_cache() -> None:
     with console.status('[yellow]Cleaning[/]', spinner='dots'):
         if os.path.exists(user_cache_dir(cache_name, cache_author)):
             shutil.rmtree(user_cache_dir(cache_name, cache_author), ignore_errors=True)
-    console.print('[bold green]SUCCESS:[/] there is no more messy around here.')
+    log('[bold green]SUCCESS:[/] there is no more messy around here.')
 
 
 @cli.command('kill-server')
@@ -480,7 +464,7 @@ def kill_server() -> None:
                 adb.disconnect(item.serial)
             except adbutils.AdbError:
                 continue
-    console.print('[bold red]DISCONNECTED:[/] everything fine, but now you are alone.')
+    log('[bold red]DISCONNECTED:[/] everything fine, but now you are alone.')
 
 
 if __name__ == '__main__':

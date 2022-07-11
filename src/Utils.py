@@ -173,3 +173,16 @@ class Display(App):
                 Device('No devices connected. Press \'Q\' to exit.', hover_color='', text_color='bold red'),
                 edge='top'
             )
+
+
+def error(string: str) -> None:
+    """Error printing"""
+
+    console.print(string)
+    sys.exit(1)
+
+
+def log(string: Any, end: str = '\n') -> None:
+    """Log printing"""
+
+    console.print(string, end=end)
