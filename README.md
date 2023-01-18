@@ -5,6 +5,8 @@
 This tool is written entirely in python, and it represents a wrapper for ADB from platform-tools.
 The idea came out when we were playing with an interactive whiteboard, so we found out that is based on Android.
 
+*This project is licensed under the MIT license*.
+
 **THE USAGE OF THIS TOOL IS NOT INTENDED TO DAMAGE NO ONE AND WE DON'T TAKE ANY RESPONSIBILITY FOR ITS BAD USAGE.**
 
 
